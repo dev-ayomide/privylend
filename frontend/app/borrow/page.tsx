@@ -1,25 +1,78 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { LoanForm } from '@/components/LoanForm';
+import { usePrivyLend } from '@/hooks/usePrivyLend';
 import { mockCollateral } from '@/lib/mockData';
 import { formatCurrency } from '@/lib/utils';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import { Party } from '@daml/types';
+
+const USE_MOCK_DATA = process.env.NEXT_PUBLIC_USE_MOCK_DATA !== 'false';
 
 export default function BorrowPage() {
   const [selectedCollateral, setSelectedCollateral] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-
-  const availableCollateral = mockCollateral.filter(c => c.status === 'Available');
+  const [error, setError] = useState<string | null>(null);
+  const [lenders, setLenders] = useState<Array<{ id: string; owner: Party; name: string; availableFunds: number }>>([]);
+  const [selectedLender, setSelectedLender] = useState<Party | null>(null);
+  
+  const { collateral, api, refreshData } = usePrivyLend();
+  
+  // Use mock data if enabled or if there's an error/loading in production mode
+  const displayCollateral = USE_MOCK_DATA || !api ? mockCollateral : collateral;
+  const availableCollateral = displayCollateral.filter(c => c.status === 'Available');
   const selected = availableCollateral.find(c => c.id === selectedCollateral);
 
-  const handleLoanRequest = (data: { amount: number; termDays: number; interestRate: number }) => {
-    console.log('Loan request:', data);
-    setSuccess(true);
-    
-    setTimeout(() => {
-      setSuccess(false);
-    }, 5000);
+  useEffect(() => {
+    if (api && !USE_MOCK_DATA) {
+      api.getLendingPools().then(setLenders).catch(console.error);
+      // Default to first lender if available
+      api.getLendingPools().then((pools) => {
+        if (pools.length > 0) {
+          setSelectedLender(pools[0].owner);
+        }
+      });
+    }
+  }, [api]);
+
+  const handleLoanRequest = async (data: { amount: number; termDays: number; interestRate: number }) => {
+    if (USE_MOCK_DATA || !api) {
+      // Mock mode
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 5000);
+      return;
+    }
+
+    if (!selectedCollateral) {
+      setError('Please select collateral');
+      return;
+    }
+
+    if (!selectedLender) {
+      setError('Please select a lender');
+      return;
+    }
+
+    setError(null);
+    setSuccess(false);
+
+    try {
+      await api.requestLoan(
+        selectedCollateral,
+        data.amount,
+        data.termDays,
+        selectedLender,
+        data.interestRate
+      );
+      setSuccess(true);
+      await refreshData();
+      setTimeout(() => setSuccess(false), 5000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to request loan');
+      console.error('Loan request error:', err);
+    }
   };
 
   return (
@@ -30,6 +83,19 @@ export default function BorrowPage() {
           Borrow against your collateral with privacy and transparency
         </p>
       </div>
+
+      {error && (
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="pt-6">
+            <p className="text-red-700 font-medium text-center flex items-center justify-center gap-2">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {error}
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {success && (
         <Card className="border-green-200 bg-green-50">
@@ -103,10 +169,30 @@ export default function BorrowPage() {
           </div>
           
           {selected ? (
-            <LoanForm
-              collateralValue={selected.value}
-              onSubmit={handleLoanRequest}
-            />
+            <>
+              {!USE_MOCK_DATA && lenders.length > 0 && (
+                <Card className="border-slate-200 mb-4">
+                  <CardContent className="pt-6">
+                    <Label className="text-sm font-medium text-slate-700 mb-2 block">Select Lender</Label>
+                    <select
+                      value={selectedLender || ''}
+                      onChange={(e) => setSelectedLender(e.target.value as Party)}
+                      className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      {lenders.map((lender) => (
+                        <option key={lender.id} value={lender.owner}>
+                          {lender.name} ({formatCurrency(lender.availableFunds)} available)
+                        </option>
+                      ))}
+                    </select>
+                  </CardContent>
+                </Card>
+              )}
+              <LoanForm
+                collateralValue={selected.value}
+                onSubmit={handleLoanRequest}
+              />
+            </>
           ) : (
             <Card className="border-slate-200">
               <CardContent className="pt-6 text-center">

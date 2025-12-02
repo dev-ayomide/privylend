@@ -14,6 +14,8 @@ npm run dev
 
 Open http://localhost:3000
 
+The demo runs in mock data mode by default to showcase all features without requiring Canton infrastructure setup.
+
 ## 📋 Overview
 
 PrivyLend solves the critical challenge of balancing user privacy with regulatory compliance in DeFi lending. Using Canton's privacy features, we enable:
@@ -52,9 +54,20 @@ PrivyLend uses Canton's observer pattern to enable selective disclosure:
 - **Frontend**: Next.js 16, TypeScript, Tailwind CSS
 - **Testing**: Comprehensive Daml test suite
 
+## 🎯 Canton Construct Ideathon 2025
+
+**Challenge Track**: Lending, Borrowing & Yield Applications
+
+**Key Innovation**: Privacy-preserving lending using Canton's observer pattern for selective disclosure
+
+## 🎥 Demo Video
+
+[Link to demo video] - 2-minute walkthrough of PrivyLend's privacy-preserving lending features
+
 ## 📖 Documentation
 
-See [DEMO_GUIDE.md](./DEMO_GUIDE.md) for a complete walkthrough of the application features and demo script.
+- [DEMO_GUIDE.md](./DEMO_GUIDE.md) - Complete feature walkthrough and demo script
+- [daml/privylend-contracts/daml/Main.daml](./daml/privylend-contracts/daml/Main.daml) - Smart contract implementation
 
 ## 📄 License
 

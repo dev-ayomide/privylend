@@ -51,8 +51,13 @@ export default function RootLayout({
                     <span className="text-xl font-semibold text-slate-900 tracking-tight">PrivyLend</span>
                   </Link>
                   {USE_MOCK_DATA && (
-                    <span className="px-2.5 py-1 text-xs font-medium bg-amber-50 text-amber-700 rounded-md border border-amber-200">
+                    <span className="px-2.5 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-md border border-yellow-200">
                       Demo Mode
+                    </span>
+                  )}
+                  {!USE_MOCK_DATA && (
+                    <span className="px-2.5 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-md border border-green-200">
+                      Production Mode
                     </span>
                   )}
                 </div>

@@ -2,15 +2,24 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { CollateralCard } from '@/components/CollateralCard';
+import { usePrivyLend } from '@/hooks/usePrivyLend';
 import { mockCollateral, mockLoans } from '@/lib/mockData';
 import { formatCurrency } from '@/lib/utils';
 
+const USE_MOCK_DATA = process.env.NEXT_PUBLIC_USE_MOCK_DATA !== 'false';
+
 export default function Home() {
-  const totalCollateral = mockCollateral.reduce((sum, acc) => sum + acc.value, 0);
-  const activeLoansCount = mockLoans.filter(loan => loan.status === 'Active').length;
-  const totalBorrowed = mockLoans.filter(loan => loan.status === 'Active')
+  const { collateral, loans, loading, error } = usePrivyLend();
+  
+  // Use mock data if enabled or if there's an error/loading in production mode
+  const displayCollateral = USE_MOCK_DATA || error || loading ? mockCollateral : collateral;
+  const displayLoans = USE_MOCK_DATA || error || loading ? mockLoans : loans;
+  
+  const totalCollateral = displayCollateral.reduce((sum, acc) => sum + acc.value, 0);
+  const activeLoansCount = displayLoans.filter(loan => loan.status === 'Active' || loan.status === 'Due Soon').length;
+  const totalBorrowed = displayLoans.filter(loan => loan.status === 'Active' || loan.status === 'Due Soon')
     .reduce((sum, loan) => sum + loan.principal, 0);
-  const availableToWithdraw = mockCollateral
+  const availableToWithdraw = displayCollateral
     .filter(acc => acc.status === 'Available')
     .reduce((sum, acc) => sum + acc.value, 0);
 
@@ -22,6 +31,18 @@ export default function Home() {
         <p className="text-lg text-slate-600 max-w-2xl mx-auto">
           Privacy-preserving lending protocol built on Canton. Borrow with confidence while maintaining your privacy.
         </p>
+        {error && !USE_MOCK_DATA && (
+          <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg max-w-2xl mx-auto">
+            <p className="text-sm text-yellow-800">
+              ⚠️ Unable to connect to Canton Network. Using demo mode. Please check your connection settings.
+            </p>
+          </div>
+        )}
+        {loading && !USE_MOCK_DATA && (
+          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg max-w-2xl mx-auto">
+            <p className="text-sm text-blue-800">Loading data from Canton Network...</p>
+          </div>
+        )}
       </div>
 
       {/* Statistics Grid */}
@@ -39,7 +60,7 @@ export default function Home() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-slate-900 mb-1 font-numeric">{formatCurrency(totalCollateral)}</div>
-            <p className="text-xs text-slate-500">Across {mockCollateral.length} accounts</p>
+            <p className="text-xs text-slate-500">Across {displayCollateral.length} accounts</p>
           </CardContent>
         </Card>
 
@@ -102,9 +123,16 @@ export default function Home() {
           <p className="text-slate-600">Manage and monitor your deposited assets</p>
         </div>
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {mockCollateral.map((collateral) => (
-            <CollateralCard key={collateral.id} collateral={collateral} />
-          ))}
+          {displayCollateral.length === 0 ? (
+            <div className="col-span-full text-center py-8">
+              <p className="text-slate-600">No collateral accounts found.</p>
+              <p className="text-sm text-slate-500 mt-2">Deposit collateral to get started.</p>
+            </div>
+          ) : (
+            displayCollateral.map((collateral) => (
+              <CollateralCard key={collateral.id} collateral={collateral} />
+            ))
+          )}
         </div>
       </div>
 

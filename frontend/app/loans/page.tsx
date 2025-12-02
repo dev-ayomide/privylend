@@ -2,28 +2,49 @@
 
 import { useState } from 'react';
 import { LoanTable } from '@/components/LoanTable';
+import { usePrivyLend } from '@/hooks/usePrivyLend';
 import { mockLoans } from '@/lib/mockData';
 import { formatCurrency } from '@/lib/utils';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
-export default function LoansPage() {
-  const [loans, setLoans] = useState(mockLoans);
-  const [repaymentSuccess, setRepaymentSuccess] = useState(false);
+const USE_MOCK_DATA = process.env.NEXT_PUBLIC_USE_MOCK_DATA !== 'false';
 
-  const handleRepay = (loanId: string, amount: number) => {
-    console.log('Repaying loan:', loanId, amount);
-    
-    setLoans(loans.map(loan =>
-      loan.id === loanId
-        ? { ...loan, status: 'Repaid' as const }
-        : loan
-    ));
-    
-    setRepaymentSuccess(true);
-    setTimeout(() => setRepaymentSuccess(false), 3000);
+export default function LoansPage() {
+  const { loans, api, refreshData } = usePrivyLend();
+  const [repaymentSuccess, setRepaymentSuccess] = useState(false);
+  const [repaymentError, setRepaymentError] = useState<string | null>(null);
+  const [repayingLoanId, setRepayingLoanId] = useState<string | null>(null);
+
+  // Use mock data if enabled or if there's an error/loading in production mode
+  const displayLoans = USE_MOCK_DATA || !api ? mockLoans : loans;
+
+  const handleRepay = async (loanId: string, amount: number) => {
+    if (USE_MOCK_DATA || !api) {
+      // Mock mode
+      setRepaymentSuccess(true);
+      setTimeout(() => setRepaymentSuccess(false), 3000);
+      return;
+    }
+
+    setRepaymentError(null);
+    setRepayingLoanId(loanId);
+
+    try {
+      await api.repayLoan(loanId, amount);
+      setRepaymentSuccess(true);
+      await refreshData();
+      setTimeout(() => {
+        setRepaymentSuccess(false);
+      }, 3000);
+    } catch (err) {
+      setRepaymentError(err instanceof Error ? err.message : 'Failed to repay loan');
+      console.error('Repayment error:', err);
+    } finally {
+      setRepayingLoanId(null);
+    }
   };
 
-  const activeLoans = loans.filter(l => l.status === 'Active');
+  const activeLoans = displayLoans.filter(l => l.status === 'Active' || l.status === 'Due Soon');
   const totalOwed = activeLoans.reduce((sum, loan) => sum + loan.totalOwed, 0);
   const avgInterest = activeLoans.length > 0
     ? activeLoans.reduce((sum, loan) => sum + loan.interestRate, 0) / activeLoans.length
@@ -37,6 +58,19 @@ export default function LoansPage() {
           Manage your active loans and repayment schedule
         </p>
       </div>
+
+      {repaymentError && (
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="pt-6">
+            <p className="text-red-700 font-medium text-center flex items-center justify-center gap-2">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {repaymentError}
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {repaymentSuccess && (
         <Card className="border-green-200 bg-green-50">
@@ -112,7 +146,14 @@ export default function LoansPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <LoanTable loans={loans} onRepay={handleRepay} />
+          {displayLoans.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-slate-600">No loans found.</p>
+              <p className="text-sm text-slate-500 mt-2">Request a loan to get started.</p>
+            </div>
+          ) : (
+            <LoanTable loans={displayLoans} onRepay={handleRepay} />
+          )}
         </CardContent>
       </Card>
 

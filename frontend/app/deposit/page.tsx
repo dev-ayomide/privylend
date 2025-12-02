@@ -6,24 +6,53 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/lib/utils';
+import { usePrivyLend } from '@/hooks/usePrivyLend';
+import { AssetType } from '@/lib/types';
+
+const USE_MOCK_DATA = process.env.NEXT_PUBLIC_USE_MOCK_DATA !== 'false';
 
 export default function DepositPage() {
   const [amount, setAmount] = useState('');
-  const [assetType, setAssetType] = useState('Crypto');
+  const [assetType, setAssetType] = useState<AssetType>('Cryptocurrency');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { api, refreshData } = usePrivyLend();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     setIsSubmitting(true);
-    
-    setTimeout(() => {
-      setIsSubmitting(false);
+
+    if (USE_MOCK_DATA || !api) {
+      // Mock mode - simulate delay
+      setTimeout(() => {
+        setIsSubmitting(false);
+        setSuccess(true);
+        setAmount('');
+        setTimeout(() => setSuccess(false), 3000);
+      }, 2000);
+      return;
+    }
+
+    try {
+      const amountNum = parseFloat(amount);
+      if (amountNum < 1000) {
+        throw new Error('Minimum deposit is $1,000');
+      }
+
+      await api.depositCollateral(assetType, amountNum);
       setSuccess(true);
       setAmount('');
+      await refreshData(); // Refresh data after deposit
       
       setTimeout(() => setSuccess(false), 3000);
-    }, 2000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to deposit collateral');
+      console.error('Deposit error:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -49,12 +78,12 @@ export default function DepositPage() {
               <select
                 id="assetType"
                 value={assetType}
-                onChange={(e) => setAssetType(e.target.value)}
+                onChange={(e) => setAssetType(e.target.value as AssetType)}
                 className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 required
               >
-                <option value="Crypto">Cryptocurrency</option>
-                <option value="RealEstate">Real Estate</option>
+                <option value="Cryptocurrency">Cryptocurrency</option>
+                <option value="Real Estate">Real Estate</option>
                 <option value="Securities">Securities</option>
                 <option value="Commodities">Commodities</option>
               </select>
@@ -90,6 +119,19 @@ export default function DepositPage() {
                   </p>
                   <p className="text-xs text-slate-600">
                     Up to 70% LTV ratio
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+
+            {error && (
+              <Card className="border-red-200 bg-red-50">
+                <CardContent className="pt-6">
+                  <p className="text-red-700 font-medium flex items-center gap-2">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    {error}
                   </p>
                 </CardContent>
               </Card>

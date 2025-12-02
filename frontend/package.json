@@ -9,6 +9,9 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@daml/ledger": "^2.10.2",
+    "@daml/react": "^2.10.2",
+    "@daml/types": "^2.10.2",
     "next": "16.0.6",
     "react": "19.2.0",
     "react-dom": "19.2.0"
