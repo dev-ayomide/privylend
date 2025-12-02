@@ -41,50 +41,52 @@ export default function RootLayout({
         <div className="min-h-screen bg-slate-50">
           {/* Professional Navigation */}
           <nav className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm">
-            <div className="max-w-7xl mx-auto px-6">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6">
               <div className="flex items-center justify-between h-16">
-                <div className="flex items-center gap-4">
-                  <Link href="/" className="flex items-center gap-3 group">
-                    <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center shadow-sm group-hover:shadow-md transition-shadow">
-                      <span className="text-white font-bold text-lg">P</span>
+                <div className="flex items-center gap-2 sm:gap-4">
+                  <Link href="/" className="flex items-center gap-2 sm:gap-3 group">
+                    <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-blue-600 flex items-center justify-center shadow-sm group-hover:shadow-md transition-shadow">
+                      <span className="text-white font-bold text-base sm:text-lg">P</span>
                     </div>
-                    <span className="text-xl font-semibold text-slate-900 tracking-tight">PrivyLend</span>
+                    <span className="text-lg sm:text-xl font-semibold text-slate-900 tracking-tight">PrivyLend</span>
                   </Link>
                   {USE_MOCK_DATA && (
-                    <span className="px-2.5 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-md border border-yellow-200">
+                    <span className="hidden sm:inline-block px-2.5 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-md border border-yellow-200">
                       Demo Mode
                     </span>
                   )}
                   {!USE_MOCK_DATA && (
-                    <span className="px-2.5 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-md border border-green-200">
+                    <span className="hidden sm:inline-block px-2.5 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-md border border-green-200">
                       Production Mode
                     </span>
                   )}
                 </div>
-                <div className="flex gap-1 bg-slate-100 rounded-lg p-1">
+                <div className="flex gap-0.5 sm:gap-1 bg-slate-100 rounded-lg p-0.5 sm:p-1">
                   <Link 
                     href="/" 
-                    className="px-4 py-2 rounded-md text-sm font-medium text-slate-700 hover:text-slate-900 hover:bg-white transition-colors"
+                    className="px-2 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium text-slate-700 hover:text-slate-900 hover:bg-white transition-colors"
                   >
-                    Dashboard
+                    <span className="hidden sm:inline">Dashboard</span>
+                    <span className="sm:hidden">Home</span>
                   </Link>
                   <Link 
                     href="/deposit" 
-                    className="px-4 py-2 rounded-md text-sm font-medium text-slate-700 hover:text-slate-900 hover:bg-white transition-colors"
+                    className="px-2 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium text-slate-700 hover:text-slate-900 hover:bg-white transition-colors"
                   >
                     Deposit
                   </Link>
                   <Link 
                     href="/borrow" 
-                    className="px-4 py-2 rounded-md text-sm font-medium text-slate-700 hover:text-slate-900 hover:bg-white transition-colors"
+                    className="px-2 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium text-slate-700 hover:text-slate-900 hover:bg-white transition-colors"
                   >
                     Borrow
                   </Link>
                   <Link 
                     href="/loans" 
-                    className="px-4 py-2 rounded-md text-sm font-medium text-slate-700 hover:text-slate-900 hover:bg-white transition-colors"
+                    className="px-2 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium text-slate-700 hover:text-slate-900 hover:bg-white transition-colors"
                   >
-                    My Loans
+                    <span className="hidden sm:inline">My Loans</span>
+                    <span className="sm:hidden">Loans</span>
                   </Link>
                 </div>
               </div>
@@ -98,21 +100,14 @@ export default function RootLayout({
 
           {/* Professional Footer */}
           <footer className="mt-16 border-t border-slate-200 bg-white">
-            <div className="max-w-7xl mx-auto px-6 py-8">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
               <div className="text-center">
-                <p className="text-slate-600 font-medium">
+                <p className="text-slate-600 font-medium text-sm sm:text-base">
                   PrivyLend - Privacy-Preserving Compliant Lending on Canton
                 </p>
-                {USE_MOCK_DATA && (
-                  <p className="text-xs mt-2 text-slate-500">
-                    Demo Mode: Using mock data • Production-ready Canton integration available
-                  </p>
-                )}
-                <div className="flex justify-center gap-6 mt-4 text-sm text-slate-500">
-                  <a href="#" className="hover:text-slate-900 transition-colors">Documentation</a>
-                  <a href="#" className="hover:text-slate-900 transition-colors">GitHub</a>
-                  <a href="#" className="hover:text-slate-900 transition-colors">Canton Network</a>
-                </div>
+                <p className="mt-4 text-sm text-slate-600">
+                  Built with ❤️ for <span className="font-semibold text-blue-600">Canton Construct Ideathon</span>
+                </p>
               </div>
             </div>
           </footer>
