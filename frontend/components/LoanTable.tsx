@@ -47,7 +47,7 @@ export function LoanTable({ loans, onRepay }: LoanTableProps) {
     }
     if (status === 'Defaulted') {
       return (
-        <Badge variant="destructive" className="bg-red-50 text-red-700 border-red-200">
+        <Badge variant="danger" className="bg-red-50 text-red-700 border-red-200">
           Defaulted
         </Badge>
       );
@@ -113,8 +113,7 @@ export function LoanTable({ loans, onRepay }: LoanTableProps) {
                     <Button
                       onClick={() => handleRepay(loan)}
                       disabled={repaying === loan.id}
-                      size="sm"
-                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                      className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2"
                     >
                       {repaying === loan.id ? 'Processing...' : 'Repay Loan'}
                     </Button>

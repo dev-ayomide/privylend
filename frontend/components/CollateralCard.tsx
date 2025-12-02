@@ -71,7 +71,7 @@ export function CollateralCard({ collateral }: CollateralCardProps) {
             </div>
           </div>
           {collateral.status === 'Locked' ? (
-            <Badge variant="destructive" className="bg-red-50 text-red-700 border-red-200">
+            <Badge variant="danger" className="bg-red-50 text-red-700 border-red-200">
               Locked
             </Badge>
           ) : (
