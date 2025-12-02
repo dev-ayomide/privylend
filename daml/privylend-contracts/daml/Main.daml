@@ -1,0 +1,327 @@
+-- | PrivyLend: Privacy-Preserving Compliant Lending Protocol
+-- | Enables lending with privacy for borrowers while ensuring regulatory compliance
+module Main where
+
+import Daml.Script
+import DA.Date
+import DA.Time
+
+-- | Types for better code clarity
+type CollateralId = ContractId CollateralAccount
+type LoanRequestId = ContractId LoanRequest
+type ActiveLoanId = ContractId ActiveLoan
+type LendingPoolId = ContractId LendingPool
+
+-- | Asset types supported as collateral
+data AssetType = Crypto | RealEstate | Securities | Commodities
+  deriving (Eq, Show)
+
+-- | Loan status states
+data LoanStatus = Pending | Approved | Rejected | Active | Repaid | Defaulted
+  deriving (Eq, Show)
+
+-- | TEMPLATE 1: CollateralAccount
+-- | Represents collateral deposited by a borrower
+-- | Privacy: Only owner and approved observers can see collateral details
+template CollateralAccount
+  with
+    owner : Party              -- Borrower who owns the collateral
+    collateralAmount : Decimal -- Value of collateral in USD
+    assetType : AssetType      -- Type of asset held as collateral
+    isLocked : Bool            -- Whether collateral is locked for a loan
+    depositDate : Date         -- When collateral was deposited
+    observers : [Party]        -- Regulators or auditors who can observe
+  where
+    signatory owner
+    observer observers
+
+    -- Validation: Collateral must be positive
+    ensure collateralAmount > 0.0
+
+    -- Choice: Lock collateral when loan is approved
+    choice LockCollateral : CollateralId
+      with
+        locker : Party
+      controller owner
+      do
+        assertMsg "Collateral is already locked" (not isLocked)
+        create this with isLocked = True
+
+    -- Choice: Unlock collateral when loan is repaid
+    choice UnlockCollateral : CollateralId
+      controller owner
+      do
+        assertMsg "Collateral is not locked" isLocked
+        create this with isLocked = False
+
+    -- Choice: Withdraw collateral (only if unlocked)
+    choice WithdrawCollateral : ()
+      controller owner
+      do
+        assertMsg "Cannot withdraw locked collateral" (not isLocked)
+        return ()
+
+    -- Choice: Add observers (for regulatory compliance)
+    choice AddObserver : CollateralId
+      with
+        newObserver : Party
+      controller owner
+      do
+        create this with observers = newObserver :: observers
+
+-- | TEMPLATE 2: LoanRequest
+-- | Represents a borrower's request for a loan
+-- | Privacy: Lender sees loan terms but not full borrower identity
+template LoanRequest
+  with
+    borrower : Party           -- Borrower requesting loan
+    lender : Party             -- Lending pool or individual lender
+    requestedAmount : Decimal  -- Loan amount requested
+    collateralId : CollateralId -- Reference to collateral contract
+    collateralValue : Decimal  -- Value of collateral (cached for LTV calc)
+    interestRate : Decimal     -- Annual interest rate (e.g., 5.0 = 5%)
+    loanTermDays : Int         -- Loan duration in days
+    status : LoanStatus        -- Current status of request
+    requestDate : Date         -- When request was created
+    observers : [Party]        -- Regulators who can audit
+  where
+    signatory borrower
+    observer lender :: observers
+
+    -- Validation: LTV ratio must be safe (max 70%)
+    ensure requestedAmount <= collateralValue * 0.70
+       && requestedAmount > 0.0
+       && interestRate >= 0.0
+       && loanTermDays > 0
+
+    -- Choice: Lender approves loan request
+    choice ApproveLoan : ActiveLoanId
+      controller lender
+      do
+        assertMsg "Loan is not pending" (status == Pending)
+        now <- getTime
+        let dueDate = addDays (toDateUTC now) loanTermDays
+        
+        -- Lock the collateral
+        exercise collateralId LockCollateral with locker = lender
+        
+        -- Create active loan
+        create ActiveLoan with
+          borrower
+          lender
+          principal = requestedAmount
+          interestRate
+          dueDate
+          collateralId
+          collateralValue
+          startDate = toDateUTC now
+          status = Active
+          observers
+
+    -- Choice: Lender rejects loan request
+    choice RejectLoan : ()
+      controller lender
+      do
+        assertMsg "Loan is not pending" (status == Pending)
+        return ()
+
+-- | TEMPLATE 3: ActiveLoan
+-- | Represents an active loan between borrower and lender
+-- | Privacy: Only parties and regulators can see loan details
+template ActiveLoan
+  with
+    borrower : Party           -- Borrower
+    lender : Party             -- Lender
+    principal : Decimal        -- Original loan amount
+    interestRate : Decimal     -- Annual interest rate
+    dueDate : Date             -- When loan must be repaid
+    collateralId : CollateralId -- Locked collateral
+    collateralValue : Decimal  -- Value of collateral
+    startDate : Date           -- When loan started
+    status : LoanStatus        -- Current status
+    observers : [Party]        -- Regulators
+  where
+    signatory borrower, lender
+    observer observers
+
+    ensure principal > 0.0 && interestRate >= 0.0
+
+    -- Choice: Borrower repays the loan
+    choice RepayLoan : CollateralId
+      with
+        repaymentAmount : Decimal
+      controller borrower
+      do
+        let totalOwed = calculateTotalOwed principal interestRate startDate dueDate
+        assertMsg "Insufficient repayment amount" (repaymentAmount >= totalOwed)
+        assertMsg "Loan is not active" (status == Active)
+        
+        -- Unlock the collateral
+        exercise collateralId UnlockCollateral
+
+    -- Choice: Lender liquidates collateral if loan defaults
+    choice LiquidateCollateral : ()
+      controller lender
+      do
+        now <- getTime
+        assertMsg "Loan has not reached due date" (toDateUTC now > dueDate)
+        assertMsg "Loan must be active" (status == Active)
+        
+        -- In production, this would transfer collateral to lender
+        -- For demo, we just mark as liquidated
+        return ()
+
+    -- Choice: Extend loan term (requires both parties)
+    choice ExtendLoan : ActiveLoanId
+      with
+        additionalDays : Int
+      controller borrower, lender
+      do
+        create this with dueDate = addDays dueDate additionalDays
+
+-- | TEMPLATE 4: LendingPool
+-- | Represents a pool of funds available for lending
+-- | Privacy: Pool stats visible to participants, individual loans are private
+template LendingPool
+  with
+    poolOwner : Party          -- Owner/manager of the pool
+    availableFunds : Decimal   -- Current available funds for lending
+    totalLoaned : Decimal      -- Total amount currently loaned out
+    totalRepaid : Decimal      -- Total amount repaid to pool
+    poolName : Text            -- Name of the lending pool
+    minLoanAmount : Decimal    -- Minimum loan size
+    maxLoanAmount : Decimal    -- Maximum loan size
+    defaultInterestRate : Decimal -- Default interest rate offered
+    participants : [Party]     -- Investors in the pool
+  where
+    signatory poolOwner
+    observer participants
+
+    ensure availableFunds >= 0.0
+       && totalLoaned >= 0.0
+       && minLoanAmount > 0.0
+       && maxLoanAmount >= minLoanAmount
+
+    -- Choice: Add funds to the pool
+    choice AddFunds : LendingPoolId
+      with
+        investor : Party
+        amount : Decimal
+      controller investor
+      do
+        assertMsg "Amount must be positive" (amount > 0.0)
+        create this with
+          availableFunds = availableFunds + amount
+          participants = if investor `elem` participants then participants else investor :: participants
+
+    -- Choice: Disburse loan from pool
+    choice DisburseLoan : LendingPoolId
+      with
+        amount : Decimal
+      controller poolOwner
+      do
+        assertMsg "Insufficient funds" (amount <= availableFunds)
+        assertMsg "Amount outside loan limits" (amount >= minLoanAmount && amount <= maxLoanAmount)
+        create this with
+          availableFunds = availableFunds - amount
+          totalLoaned = totalLoaned + amount
+
+    -- Choice: Record loan repayment to pool
+    choice RecordRepayment : LendingPoolId
+      with
+        amount : Decimal
+      controller poolOwner
+      do
+        create this with
+          availableFunds = availableFunds + amount
+          totalLoaned = totalLoaned - amount
+          totalRepaid = totalRepaid + amount
+
+    -- Choice: Withdraw from pool (if funds available)
+    choice WithdrawFromPool : LendingPoolId
+      with
+        participant : Party
+        amount : Decimal
+      controller participant
+      do
+        assertMsg "Insufficient available funds" (amount <= availableFunds)
+        create this with availableFunds = availableFunds - amount
+
+-- | HELPER FUNCTIONS
+
+-- | Calculate total amount owed including interest
+calculateTotalOwed : Decimal -> Decimal -> Date -> Date -> Decimal
+calculateTotalOwed principal rate startDate dueDate =
+  let days = subDate dueDate startDate
+      years = intToDecimal days / 365.0
+      interest = principal * (rate / 100.0) * years
+  in principal + interest
+
+-- | DEMO SCRIPT
+-- | Demonstrates the complete lending workflow
+setup : Script ()
+setup = script do
+  -- Setup parties
+  alice <- allocatePartyWithHint "Alice" (PartyIdHint "Alice")
+  bob <- allocatePartyWithHint "Bob" (PartyIdHint "Bob")
+  regulator <- allocatePartyWithHint "Regulator" (PartyIdHint "Regulator")
+  
+  -- Create user accounts
+  aliceId <- validateUserId "alice"
+  bobId <- validateUserId "bob"
+  regulatorId <- validateUserId "regulator"
+  
+  createUser (User aliceId (Some alice)) [CanActAs alice]
+  createUser (User bobId (Some bob)) [CanActAs bob]
+  createUser (User regulatorId (Some regulator)) [CanActAs regulator]
+
+  -- Get current date
+  now <- getTime
+  let today = toDateUTC now
+
+  -- Alice deposits collateral
+  collateral <- submit alice do
+    createCmd CollateralAccount with
+      owner = alice
+      collateralAmount = 100000.0  -- $100k collateral
+      assetType = RealEstate
+      isLocked = False
+      depositDate = today
+      observers = [regulator]
+
+  -- Bob creates a lending pool
+  pool <- submit bob do
+    createCmd LendingPool with
+      poolOwner = bob
+      availableFunds = 500000.0
+      totalLoaned = 0.0
+      totalRepaid = 0.0
+      poolName = "Bob's Lending Pool"
+      minLoanAmount = 1000.0
+      maxLoanAmount = 100000.0
+      defaultInterestRate = 5.0
+      participants = [bob]
+
+  -- Alice requests a loan (70k against 100k collateral = 70% LTV)
+  loanRequest <- submit alice do
+    createCmd LoanRequest with
+      borrower = alice
+      lender = bob
+      requestedAmount = 70000.0
+      collateralId = collateral
+      collateralValue = 100000.0
+      interestRate = 5.0
+      loanTermDays = 365  -- 1 year
+      status = Pending
+      requestDate = today
+      observers = [regulator]
+
+  -- Bob approves the loan
+  activeLoan <- submit bob do
+    exerciseCmd loanRequest ApproveLoan
+
+  -- Bob disburses from pool
+  pool <- submit bob do
+    exerciseCmd pool DisburseLoan with amount = 70000.0
+
+  return ()

@@ -1,0 +1,167 @@
+-- | PrivyLend Test Suite
+-- | Comprehensive tests for all lending protocol scenarios
+module Tests where
+
+import Daml.Script
+import Main
+import DA.Date
+
+-- | Test 1: Happy Path - Complete Loan Lifecycle
+testCompleteLoanLifecycle : Script ()
+testCompleteLoanLifecycle = script do
+  -- Setup
+  alice <- allocateParty "Alice"
+  bob <- allocateParty "Bob"
+  regulator <- allocateParty "Regulator"
+  now <- getTime
+  let today = toDateUTC now
+
+  -- Alice deposits collateral
+  collateral <- submit alice do
+    createCmd CollateralAccount with
+      owner = alice
+      collateralAmount = 100000.0
+      assetType = RealEstate
+      isLocked = False
+      depositDate = today
+      observers = [regulator]
+
+  -- Bob creates lending pool
+  pool <- submit bob do
+    createCmd LendingPool with
+      poolOwner = bob
+      availableFunds = 500000.0
+      totalLoaned = 0.0
+      totalRepaid = 0.0
+      poolName = "Test Pool"
+      minLoanAmount = 1000.0
+      maxLoanAmount = 100000.0
+      defaultInterestRate = 5.0
+      participants = [bob]
+
+  -- Alice requests loan (70% LTV)
+  loanRequest <- submit alice do
+    createCmd LoanRequest with
+      borrower = alice
+      lender = bob
+      requestedAmount = 70000.0
+      collateralId = collateral
+      collateralValue = 100000.0
+      interestRate = 5.0
+      loanTermDays = 365
+      status = Pending
+      requestDate = today
+      observers = [regulator]
+
+  -- Bob approves loan
+  activeLoan <- submit bob do
+    exerciseCmd loanRequest ApproveLoan
+
+  -- Update pool
+  pool2 <- submit bob do
+    exerciseCmd pool DisburseLoan with amount = 70000.0
+
+  -- Alice repays loan (principal + interest)
+  unlockedCollateral <- submit alice do
+    exerciseCmd activeLoan RepayLoan with repaymentAmount = 73500.0
+
+  -- Pool records repayment
+  submit bob do
+    exerciseCmd pool2 RecordRepayment with amount = 73500.0
+
+  return ()
+
+-- | Test 2: Loan Rejection
+testLoanRejection : Script ()
+testLoanRejection = script do
+  alice <- allocateParty "Alice"
+  bob <- allocateParty "Bob"
+  now <- getTime
+  let today = toDateUTC now
+
+  collateral <- submit alice do
+    createCmd CollateralAccount with
+      owner = alice
+      collateralAmount = 50000.0
+      assetType = Crypto
+      isLocked = False
+      depositDate = today
+      observers = []
+
+  loanRequest <- submit alice do
+    createCmd LoanRequest with
+      borrower = alice
+      lender = bob
+      requestedAmount = 30000.0
+      collateralId = collateral
+      collateralValue = 50000.0
+      interestRate = 8.0
+      loanTermDays = 180
+      status = Pending
+      requestDate = today
+      observers = []
+
+  -- Bob rejects the loan
+  submit bob do
+    exerciseCmd loanRequest RejectLoan
+
+  return ()
+
+-- | Test 3: LTV Validation (Should Fail)
+testLTVValidationFailure : Script ()
+testLTVValidationFailure = script do
+  alice <- allocateParty "Alice"
+  bob <- allocateParty "Bob"
+  now <- getTime
+  let today = toDateUTC now
+
+  collateral <- submit alice do
+    createCmd CollateralAccount with
+      owner = alice
+      collateralAmount = 50000.0
+      assetType = Crypto
+      isLocked = False
+      depositDate = today
+      observers = []
+
+  -- Try to request loan > 70% LTV (should fail)
+  submitMustFail alice do
+    createCmd LoanRequest with
+      borrower = alice
+      lender = bob
+      requestedAmount = 40000.0  -- 80% LTV - too high!
+      collateralId = collateral
+      collateralValue = 50000.0
+      interestRate = 5.0
+      loanTermDays = 365
+      status = Pending
+      requestDate = today
+      observers = []
+
+  return ()
+
+-- | Test 4: Locked Collateral Cannot Be Withdrawn
+testLockedCollateralProtection : Script ()
+testLockedCollateralProtection = script do
+  owner <- allocateParty "Owner"
+  now <- getTime
+  let today = toDateUTC now
+
+  collateral <- submit owner do
+    createCmd CollateralAccount with
+      owner
+      collateralAmount = 100000.0
+      assetType = RealEstate
+      isLocked = False
+      depositDate = today
+      observers = []
+
+  -- Lock the collateral
+  lockedCollateral <- submit owner do
+    exerciseCmd collateral LockCollateral with locker = owner
+
+  -- Try to withdraw (should fail)
+  submitMustFail owner do
+    exerciseCmd lockedCollateral WithdrawCollateral
+
+  return ()
