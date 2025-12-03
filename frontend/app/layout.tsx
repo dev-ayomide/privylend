@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Manrope, Inter, JetBrains_Mono } from "next/font/google";
 import Link from "next/link";
+import Image from "next/image";
 import "./globals.css";
 
 const manrope = Manrope({
@@ -24,6 +25,10 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "PrivyLend - Privacy-Preserving Lending Protocol",
   description: "Decentralized lending with privacy and compliance",
+  icons: {
+    icon: "/privylend-logo.svg",
+    apple: "/privylend-logo.svg",
+  },
 };
 
 const USE_MOCK_DATA = process.env.NEXT_PUBLIC_USE_MOCK_DATA !== 'false';
@@ -43,12 +48,19 @@ export default function RootLayout({
           <nav className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm">
             <div className="max-w-7xl mx-auto px-4 sm:px-6">
               <div className="flex items-center justify-between h-16">
-                <div className="flex items-center gap-2 sm:gap-4">
-                  <Link href="/" className="flex items-center gap-2 sm:gap-3 group">
-                    <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-blue-600 flex items-center justify-center shadow-sm group-hover:shadow-md transition-shadow">
-                      <span className="text-white font-bold text-base sm:text-lg">P</span>
-                    </div>
-                    <span className="text-lg sm:text-xl font-semibold text-slate-900 tracking-tight">PrivyLend</span>
+              <div className="flex items-center gap-2 sm:gap-4">
+                <Link href="/" className="flex items-center gap-2 sm:gap-3 group">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center group-hover:scale-105 transition-transform">
+                    <Image 
+                      src="/privylend-logo.svg" 
+                      alt="PrivyLend Logo" 
+                      width={40} 
+                      height={40}
+                      className="w-full h-full"
+                      priority
+                    />
+                  </div>
+                  <span className="text-lg sm:text-xl font-semibold text-slate-900 tracking-tight">PrivyLend</span>
                   </Link>
                   {USE_MOCK_DATA && (
                     <span className="hidden sm:inline-block px-2.5 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-md border border-yellow-200">

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 
 export default function Navigation() {
@@ -18,7 +19,15 @@ export default function Navigation() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex">
-            <div className="flex-shrink-0 flex items-center">
+            <div className="shrink-0 flex items-center gap-2">
+              <Image 
+                src="/privylend-logo.svg" 
+                alt="PrivyLend Logo" 
+                width={32} 
+                height={32}
+                className="w-8 h-8"
+                priority
+              />
               <h1 className="text-2xl font-bold text-indigo-600">PrivyLend</h1>
             </div>
             <div className="hidden sm:ml-8 sm:flex sm:space-x-8">

@@ -29,3 +29,4 @@ export const clearAuth = (): void => {
   localStorage.removeItem('daml_token');
 };
 
+
