@@ -3,11 +3,12 @@
 import { useState, useEffect } from 'react';
 import { LoanForm } from '@/components/LoanForm';
 import { usePrivyLend } from '@/hooks/usePrivyLend';
-import { mockCollateral } from '@/lib/mockData';
+import { loadCollateral } from '@/lib/mockData';
 import { formatCurrency } from '@/lib/utils';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Party } from '@daml/types';
+import { CollateralAccount } from '@/lib/types';
 
 const USE_MOCK_DATA = process.env.NEXT_PUBLIC_USE_MOCK_DATA !== 'false';
 
@@ -17,11 +18,18 @@ export default function BorrowPage() {
   const [error, setError] = useState<string | null>(null);
   const [lenders, setLenders] = useState<Array<{ id: string; owner: Party; name: string; availableFunds: number }>>([]);
   const [selectedLender, setSelectedLender] = useState<Party | null>(null);
+  const [displayCollateral, setDisplayCollateral] = useState<CollateralAccount[]>([]);
   
   const { collateral, api, refreshData } = usePrivyLend();
   
-  // Use mock data if enabled or if there's an error/loading in production mode
-  const displayCollateral = USE_MOCK_DATA || !api ? mockCollateral : collateral;
+  // Load data on mount
+  useEffect(() => {
+    if (USE_MOCK_DATA || !api) {
+      setDisplayCollateral(loadCollateral());
+    } else {
+      setDisplayCollateral(collateral);
+    }
+  }, [USE_MOCK_DATA, api, collateral]);
   const availableCollateral = displayCollateral.filter(c => c.status === 'Available');
   const selected = availableCollateral.find(c => c.id === selectedCollateral);
 
@@ -39,9 +47,43 @@ export default function BorrowPage() {
 
   const handleLoanRequest = async (data: { amount: number; termDays: number; interestRate: number }) => {
     if (USE_MOCK_DATA || !api) {
-      // Mock mode
+      // Mock mode - actually add to localStorage
+      if (!selectedCollateral) {
+        setError('Please select collateral');
+        setTimeout(() => setError(null), 3000);
+        return;
+      }
+
+      const { addLoan } = await import('@/lib/mockData');
+      const selectedCol = availableCollateral.find(c => c.id === selectedCollateral);
+      
+      if (!selectedCol) {
+        setError('Invalid collateral selected');
+        return;
+      }
+
+      // Calculate due date
+      const startDate = new Date();
+      const dueDate = new Date(startDate);
+      dueDate.setDate(dueDate.getDate() + data.termDays);
+
+      // Add loan with the selected collateral
+      addLoan({
+        collateralId: selectedCollateral,
+        principal: data.amount,
+        interestRate: data.interestRate,
+        termDays: data.termDays,
+        startDate: startDate.toISOString().split('T')[0],
+        dueDate: dueDate.toISOString().split('T')[0],
+        status: 'Active',
+        totalOwed: data.amount * (1 + data.interestRate / 100),
+      });
+
       setSuccess(true);
-      setTimeout(() => setSuccess(false), 5000);
+      setTimeout(() => {
+        setSuccess(false);
+        window.location.href = '/loans'; // Navigate to loans page to see the new loan
+      }, 2000);
       return;
     }
 

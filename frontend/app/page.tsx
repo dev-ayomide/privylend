@@ -1,19 +1,30 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { CollateralCard } from '@/components/CollateralCard';
 import { usePrivyLend } from '@/hooks/usePrivyLend';
-import { mockCollateral, mockLoans } from '@/lib/mockData';
+import { loadCollateral, loadLoans } from '@/lib/mockData';
 import { formatCurrency } from '@/lib/utils';
+import { CollateralAccount, Loan } from '@/lib/types';
 
 const USE_MOCK_DATA = process.env.NEXT_PUBLIC_USE_MOCK_DATA !== 'false';
 
 export default function Home() {
   const { collateral, loans, loading, error } = usePrivyLend();
+  const [displayCollateral, setDisplayCollateral] = useState<CollateralAccount[]>([]);
+  const [displayLoans, setDisplayLoans] = useState<Loan[]>([]);
   
-  // Use mock data if enabled or if there's an error/loading in production mode
-  const displayCollateral = USE_MOCK_DATA || error || loading ? mockCollateral : collateral;
-  const displayLoans = USE_MOCK_DATA || error || loading ? mockLoans : loans;
+  // Load data on mount and when mock data changes
+  useEffect(() => {
+    if (USE_MOCK_DATA || error || loading) {
+      setDisplayCollateral(loadCollateral());
+      setDisplayLoans(loadLoans());
+    } else {
+      setDisplayCollateral(collateral);
+      setDisplayLoans(loans);
+    }
+  }, [USE_MOCK_DATA, error, loading, collateral, loans]);
   
   const totalCollateral = displayCollateral.reduce((sum, acc) => sum + acc.value, 0);
   const activeLoansCount = displayLoans.filter(loan => loan.status === 'Active' || loan.status === 'Due Soon').length;

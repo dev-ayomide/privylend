@@ -25,13 +25,23 @@ export default function DepositPage() {
     setIsSubmitting(true);
 
     if (USE_MOCK_DATA || !api) {
-      // Mock mode - simulate delay
+      // Mock mode - actually add to localStorage
+      const { addCollateral } = await import('@/lib/mockData');
       setTimeout(() => {
+        const amountNum = parseFloat(amount);
+        addCollateral({
+          assetType,
+          value: amountNum,
+          status: 'Available',
+        });
         setIsSubmitting(false);
         setSuccess(true);
         setAmount('');
-        setTimeout(() => setSuccess(false), 3000);
-      }, 2000);
+        setTimeout(() => {
+          setSuccess(false);
+          window.location.reload(); // Reload to show new data
+        }, 1500);
+      }, 1000);
       return;
     }
 

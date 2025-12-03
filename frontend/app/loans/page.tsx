@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { LoanTable } from '@/components/LoanTable';
 import { usePrivyLend } from '@/hooks/usePrivyLend';
-import { mockLoans } from '@/lib/mockData';
+import { loadLoans } from '@/lib/mockData';
 import { formatCurrency } from '@/lib/utils';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Loan } from '@/lib/types';
 
 const USE_MOCK_DATA = process.env.NEXT_PUBLIC_USE_MOCK_DATA !== 'false';
 
@@ -14,9 +15,16 @@ export default function LoansPage() {
   const [repaymentSuccess, setRepaymentSuccess] = useState(false);
   const [repaymentError, setRepaymentError] = useState<string | null>(null);
   const [repayingLoanId, setRepayingLoanId] = useState<string | null>(null);
+  const [displayLoans, setDisplayLoans] = useState<Loan[]>([]);
 
-  // Use mock data if enabled or if there's an error/loading in production mode
-  const displayLoans = USE_MOCK_DATA || !api ? mockLoans : loans;
+  // Load data on mount
+  useEffect(() => {
+    if (USE_MOCK_DATA || !api) {
+      setDisplayLoans(loadLoans());
+    } else {
+      setDisplayLoans(loans);
+    }
+  }, [USE_MOCK_DATA, api, loans]);
 
   const handleRepay = async (loanId: string, amount: number) => {
     if (USE_MOCK_DATA || !api) {
