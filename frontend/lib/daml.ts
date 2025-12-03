@@ -1,4 +1,4 @@
-import { DamlLedger } from '@daml/ledger';
+import { Ledger } from '@daml/ledger';
 import { Party } from '@daml/types';
 
 // Get ledger connection from environment
@@ -10,8 +10,8 @@ export interface LedgerConfig {
   httpBaseUrl?: string;
 }
 
-export const createLedger = (config?: LedgerConfig): DamlLedger => {
-  return new DamlLedger({
+export const createLedger = (config?: LedgerConfig): Ledger => {
+  return new Ledger({
     token: config?.token || LEDGER_TOKEN,
     httpBaseUrl: config?.httpBaseUrl || LEDGER_URL,
   });

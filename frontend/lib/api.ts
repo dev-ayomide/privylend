@@ -1,6 +1,6 @@
 import { createLedger, Party } from './daml';
 import { CollateralAccount, Loan, AssetType } from './types';
-import { DamlLedger } from '@daml/ledger';
+import type { Ledger } from '@daml/ledger';
 
 // Map Daml AssetType to frontend AssetType
 const mapAssetType = (damlType: string): AssetType => {
@@ -53,7 +53,7 @@ const parseDamlDate = (dateStr: string): Date => {
 };
 
 export class PrivyLendAPI {
-  private ledger: DamlLedger;
+  private ledger: Ledger;
   private party: Party;
 
   constructor(party: Party, token?: string) {
