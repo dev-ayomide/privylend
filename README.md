@@ -3,7 +3,7 @@
 
 PrivyLend is a decentralized lending platform that enables institutional-grade borrowing and lending while maintaining complete privacy through Canton Network's privacy architecture.
 
-🎥 **[Watch Demo Video](https://www.loom.com/share/10f60d8f0f7f4a568fec9a9cbc522c5d)** | 🌐 **[Live Demo](https://privylend.vercel.app)**
+🎥 **[Watch Demo Video](https://www.loom.com/share/10f60d8f0f7f4a568fec9a9cbc522c5d)** | 🌐 **[Live Demo](https://privylend-canton.vercel.app)**
 
 ---
 
@@ -86,7 +86,6 @@ PrivyLend leverages Canton's observer pattern for selective disclosure:
 ## 📸 Screenshots
 
 ### Dashboard
-![Dashboard](./screenshots/dashboard.png)
 *Real-time overview of collateral, loans, and available credit*
 <img width="1877" height="868" alt="image" src="https://github.com/user-attachments/assets/9c5d2250-351d-4601-9049-53e5f17dc0d7" />
 
@@ -95,7 +94,7 @@ PrivyLend leverages Canton's observer pattern for selective disclosure:
 
 ## 🔗 Links
 
-- **Live Demo**: [https://privylend.vercel.app](https://privylend.vercel.app)
+- **Live Demo**: [https://privylend.vercel.app](https://privylend-canton.vercel.app)
 - **Demo Video**: [Watch on Loom](https://www.loom.com/share/10f60d8f0f7f4a568fec9a9cbc522c5d)
 - **GitHub**: [https://github.com/dev-ayomide/privylend](https://github.com/dev-ayomide/privylend)
 
