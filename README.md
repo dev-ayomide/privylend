@@ -1,74 +1,104 @@
 # PrivyLend
-
 **Privacy-Preserving Lending Protocol on Canton Network**
 
-PrivyLend is a production-ready decentralized lending platform that enables compliant lending while preserving user privacy through Canton Network's privacy architecture.
+PrivyLend is a decentralized lending platform that enables institutional-grade borrowing and lending while maintaining complete privacy through Canton Network's privacy architecture.
+
+🎥 **[Watch Demo Video](https://www.loom.com/share/10f60d8f0f7f4a568fec9a9cbc522c5d)** | 🌐 **[Live Demo](https://privylend.vercel.app)**
+
+---
 
 ## 🚀 Quick Start
 
 ```bash
+# Clone the repository
+git clone https://github.com/dev-ayomide/privylend.git
+cd privylend
+
+# Install and run frontend
 cd frontend
 npm install
 npm run dev
 ```
 
-Open http://localhost:3000
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-The demo runs in mock data mode by default to showcase all features without requiring Canton infrastructure setup.
+---
 
 ## 📋 Overview
 
-PrivyLend solves the critical challenge of balancing user privacy with regulatory compliance in DeFi lending. Using Canton's privacy features, we enable:
+PrivyLend solves the critical challenge of balancing user privacy with regulatory compliance in DeFi lending. Traditional DeFi protocols expose all transaction details publicly, preventing institutional adoption. Using Canton's privacy features, PrivyLend enables:
 
 - **Borrowers**: Prove creditworthiness without revealing identity
 - **Lenders**: Verify collateral exists without seeing specific asset details  
 - **Regulators**: Audit compliance without accessing all transaction details
+- **Institutions**: Access DeFi yields while maintaining confidentiality
+
+---
 
 ## 🏗️ Architecture
 
 ### Smart Contracts (Daml)
-- **CollateralAccount**: Manages collateral deposits with privacy
+- **CollateralAccount**: Manages collateral deposits with privacy preservation
 - **LoanRequest**: Handles loan applications with 70% LTV validation
-- **ActiveLoan**: Tracks active loans and repayments
-- **LendingPool**: Supports multi-investor lending
+- **ActiveLoan**: Tracks active loans with automated repayment logic
+- **LendingPool**: Supports multi-investor lending pools
 
 ### Frontend (Next.js)
-- **Dashboard**: Financial overview and statistics
-- **Deposit**: Add collateral to the protocol
-- **Borrow**: Request loans against collateral
-- **My Loans**: Manage active loans and repayments
+- **Dashboard**: Real-time financial overview and statistics
+- **Deposit**: Secure collateral deposits with multiple asset types
+- **Borrow**: Request loans against collateral with instant calculations
+- **My Loans**: Manage active loans, repayments, and loan history
+
+---
 
 ## 🔒 Privacy Features
 
-PrivyLend uses Canton's observer pattern to enable selective disclosure:
+PrivyLend leverages Canton's observer pattern for selective disclosure:
 
-- Collateral details are encrypted and only visible to authorized parties
-- Lenders see collateral value, not asset specifics
-- Regulators can audit without accessing personal data
-- All privacy guarantees enforced at the smart contract level
+- ✅ Collateral details encrypted and visible only to authorized parties
+- ✅ Lenders see collateral value without asset-specific information
+- ✅ Regulators can audit compliance without accessing personal data
+- ✅ Zero-knowledge proofs verify collateral sufficiency privately
+- ✅ All privacy guarantees enforced at the smart contract level
+
+---
 
 ## 🛠️ Technology Stack
 
 - **Blockchain**: Canton Network
 - **Smart Contracts**: Daml 2.10.2
-- **Frontend**: Next.js 16, TypeScript, Tailwind CSS
-- **Testing**: Comprehensive Daml test suite
+- **Frontend**: Next.js 14, TypeScript, Tailwind CSS
+- **UI Components**: shadcn/ui
+- **Testing**: Comprehensive Daml Script test suite
 
-## 🎯 Canton Construct Ideathon 2025
+---
+
+## 🎯 Canton Construct Ideathon 2024
 
 **Challenge Track**: Lending, Borrowing & Yield Applications
 
-**Key Innovation**: Privacy-preserving lending using Canton's observer pattern for selective disclosure
+**Key Innovation**: Privacy-preserving institutional lending using Canton's selective disclosure architecture
 
-## 🎥 Demo Video
+**Problem Solved**: Opens $10T+ institutional capital to DeFi by maintaining transaction confidentiality
 
-[Link to demo video] - 2-minute walkthrough of PrivyLend's privacy-preserving lending features
+---
 
-## 📖 Documentation
+## 📸 Screenshots
 
-- [DEMO_GUIDE.md](./DEMO_GUIDE.md) - Complete feature walkthrough and demo script
-- [daml/privylend-contracts/daml/Main.daml](./daml/privylend-contracts/daml/Main.daml) - Smart contract implementation
+### Dashboard
+![Dashboard](./screenshots/dashboard.png)
+*Real-time overview of collateral, loans, and available credit*
+<img width="1877" height="868" alt="image" src="https://github.com/user-attachments/assets/9c5d2250-351d-4601-9049-53e5f17dc0d7" />
 
-## 📄 License
 
-MIT License - see [LICENSE](./LICENSE) file for details.
+---
+
+## 🔗 Links
+
+- **Live Demo**: [https://privylend.vercel.app](https://privylend.vercel.app)
+- **Demo Video**: [Watch on Loom](https://www.loom.com/share/10f60d8f0f7f4a568fec9a9cbc522c5d)
+- **GitHub**: [https://github.com/dev-ayomide/privylend](https://github.com/dev-ayomide/privylend)
+
+---
+
+*Built with ❤️ on Canton Network*
