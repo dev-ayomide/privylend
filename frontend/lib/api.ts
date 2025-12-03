@@ -1,6 +1,5 @@
-import { createLedger, Party } from './daml';
+import { Party } from './daml';
 import { CollateralAccount, Loan, AssetType } from './types';
-import type { Ledger } from '@daml/ledger';
 
 // Map Daml AssetType to frontend AssetType
 const mapAssetType = (damlType: string): AssetType => {
@@ -53,75 +52,24 @@ const parseDamlDate = (dateStr: string): Date => {
 };
 
 export class PrivyLendAPI {
-  private ledger: Ledger;
   private party: Party;
 
   constructor(party: Party, token?: string) {
     this.party = party;
-    this.ledger = createLedger({ token });
   }
 
   // Fetch collateral accounts
   async getCollateralAccounts(): Promise<CollateralAccount[]> {
-    try {
-      const contracts = await this.ledger.query('Main:CollateralAccount', {
-        owner: this.party,
-      });
-
-      return contracts.map((contract) => ({
-        id: contract.contractId,
-        assetType: mapAssetType(contract.payload.assetType),
-        value: parseFloat(contract.payload.collateralAmount),
-        status: contract.payload.isLocked ? 'Locked' : 'Available',
-        lockDate: contract.payload.isLocked
-          ? contract.payload.depositDate
-          : undefined,
-      }));
-    } catch (error) {
-      console.error('Error fetching collateral accounts:', error);
-      return [];
-    }
+    // In demo mode, this would connect to Canton
+    // For now, returning empty array as mock data is used
+    return [];
   }
 
   // Fetch active loans
   async getActiveLoans(): Promise<Loan[]> {
-    try {
-      const contracts = await this.ledger.query('Main:ActiveLoan', {
-        borrower: this.party,
-      });
-
-      return contracts.map((contract) => {
-        const startDate = parseDamlDate(contract.payload.startDate);
-        const dueDate = parseDamlDate(contract.payload.dueDate);
-        const principal = parseFloat(contract.payload.principal);
-        const interestRate = parseFloat(contract.payload.interestRate);
-        const daysDiff = Math.ceil(
-          (dueDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
-        );
-
-        const totalOwed = calculateTotalOwed(
-          principal,
-          interestRate,
-          startDate,
-          dueDate
-        );
-
-        return {
-          id: contract.contractId,
-          collateralId: contract.payload.collateralId,
-          principal,
-          interestRate,
-          termDays: daysDiff,
-          startDate: startDate.toISOString().split('T')[0],
-          dueDate: dueDate.toISOString().split('T')[0],
-          status: mapLoanStatus(contract.payload.status, dueDate),
-          totalOwed,
-        };
-      });
-    } catch (error) {
-      console.error('Error fetching active loans:', error);
-      return [];
-    }
+    // In demo mode, this would connect to Canton
+    // For now, returning empty array as mock data is used
+    return [];
   }
 
   // Deposit collateral
@@ -129,19 +77,8 @@ export class PrivyLendAPI {
     assetType: AssetType,
     amount: number
   ): Promise<string> {
-    const damlAssetType = toDamlAssetType(assetType);
-    const today = new Date().toISOString().split('T')[0];
-
-    const result = await this.ledger.create('Main:CollateralAccount', {
-      owner: this.party,
-      collateralAmount: amount.toString(),
-      assetType: damlAssetType,
-      isLocked: false,
-      depositDate: today,
-      observers: [],
-    });
-
-    return result.contractId;
+    // In demo mode, this would create a contract on Canton
+    return 'mock-contract-id';
   }
 
   // Request a loan
@@ -152,65 +89,26 @@ export class PrivyLendAPI {
     lender: Party,
     interestRate: number = 5.0
   ): Promise<string> {
-    // First fetch collateral to get its value
-    const collateral = await this.ledger.fetch(
-      'Main:CollateralAccount',
-      collateralId
-    );
-
-    if (!collateral) {
-      throw new Error('Collateral not found');
-    }
-
-    const today = new Date().toISOString().split('T')[0];
-
-    const result = await this.ledger.create('Main:LoanRequest', {
-      borrower: this.party,
-      lender,
-      requestedAmount: amount.toString(),
-      collateralId,
-      collateralValue: collateral.payload.collateralAmount,
-      interestRate: interestRate.toString(),
-      loanTermDays: termDays,
-      status: 'Main:Pending',
-      requestDate: today,
-      observers: [],
-    });
-
-    return result.contractId;
+    // In demo mode, this would create a loan request on Canton
+    return 'mock-loan-id';
   }
 
   // Repay a loan
   async repayLoan(loanId: string, amount: number): Promise<void> {
-    await this.ledger.exercise('Main:ActiveLoan', 'RepayLoan', loanId, {
-      repaymentAmount: amount.toString(),
-    });
+    // In demo mode, this would exercise a choice on Canton
+    return;
   }
 
   // Get available lenders (lending pools)
   async getLendingPools(): Promise<Array<{ id: string; owner: Party; name: string; availableFunds: number }>> {
-    try {
-      const contracts = await this.ledger.query('Main:LendingPool', {});
-      return contracts.map((contract) => ({
-        id: contract.contractId,
-        owner: contract.payload.poolOwner,
-        name: contract.payload.poolName,
-        availableFunds: parseFloat(contract.payload.availableFunds),
-      }));
-    } catch (error) {
-      console.error('Error fetching lending pools:', error);
-      return [];
-    }
+    // In demo mode, this would query Canton
+    return [];
   }
 
   // Withdraw collateral
   async withdrawCollateral(collateralId: string): Promise<void> {
-    await this.ledger.exercise(
-      'Main:CollateralAccount',
-      'WithdrawCollateral',
-      collateralId,
-      {}
-    );
+    // In demo mode, this would exercise a choice on Canton
+    return;
   }
 }
 
