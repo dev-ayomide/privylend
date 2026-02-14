@@ -1,0 +1,42 @@
+module Collateral where
+
+import Asset
+
+-- Manages deposited collateral with haircuts and LTV
+template CollateralAccount
+  with
+    owner : Party
+    assetType : Text           -- "cBTC", "cETH", "USDC", "USDT"
+    quantity : Decimal
+    marketPrice : Decimal      -- Current price from oracle
+    haircut : Decimal          -- Risk adjustment (0.20 for cBTC, 0.05 for USDC)
+    effectiveValue : Decimal   -- quantity * price * (1 - haircut)
+    isLocked : Bool
+    depositTimestamp : Time
+  where
+    signatory owner
+    observer owner  -- Privacy: Only owner sees details
+
+    choice LockCollateral : ContractId CollateralAccount
+      with
+        loanId : Text
+      controller owner
+      do
+        assertMsg "Already locked" (not isLocked)
+        create this with isLocked = True
+
+    choice UnlockCollateral : ContractId CollateralAccount
+      controller owner
+      do
+        assertMsg "Not locked" isLocked
+        create this with isLocked = False
+
+    choice UpdatePrice : ContractId CollateralAccount
+      with
+        newPrice : Decimal
+      controller owner
+      do
+        let newEffectiveValue = quantity * newPrice * (1.0 - haircut)
+        create this with
+          marketPrice = newPrice
+          effectiveValue = newEffectiveValue

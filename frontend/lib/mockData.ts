@@ -26,26 +26,37 @@ export const saveLoans = (loans: Loan[]) => {
   }
 };
 
-// Default data
+// Default data - Canton-native assets
 const getDefaultCollateral = (): CollateralAccount[] => [
   {
     id: '1',
-    assetType: 'Cryptocurrency',
-    value: 150000,
+    assetType: 'cBTC',
+    quantity: 1.0,
+    marketPrice: 60000,
+    haircut: 0.20,
+    effectiveValue: 48000,   // 60000 * 1.0 * 0.80
     status: 'Available',
+    depositTimestamp: '2026-01-15T00:00:00Z',
   },
   {
     id: '2',
-    assetType: 'Real Estate',
-    value: 250000,
+    assetType: 'cETH',
+    quantity: 10.0,
+    marketPrice: 3000,
+    haircut: 0.20,
+    effectiveValue: 24000,   // 3000 * 10 * 0.80
     status: 'Locked',
-    lockDate: '2024-12-01',
+    depositTimestamp: '2026-01-10T00:00:00Z',
   },
   {
     id: '3',
-    assetType: 'Securities',
-    value: 130000,
+    assetType: 'USDC',
+    quantity: 100000,
+    marketPrice: 1,
+    haircut: 0.05,
+    effectiveValue: 95000,   // 100000 * 1 * 0.95
     status: 'Available',
+    depositTimestamp: '2026-01-20T00:00:00Z',
   },
 ];
 
@@ -53,24 +64,18 @@ const getDefaultLoans = (): Loan[] => [
   {
     id: '1',
     collateralId: '2',
-    principal: 100000,
-    interestRate: 5,
-    termDays: 365,
-    startDate: '2024-12-01',
-    dueDate: '2025-12-01',
+    loanAsset: 'USDC',
+    principal: 15000,
+    outstandingBalance: 15000,
+    collateralValue: 24000,
+    currentLTV: 0.625,        // 15000 / 24000
+    interestRate: 0.08,
+    startDate: '2026-01-10',
+    dueDate: '2026-02-09',
     status: 'Active',
-    totalOwed: 105000,
-  },
-  {
-    id: '2',
-    collateralId: '2',
-    principal: 180000,
-    interestRate: 5,
-    termDays: 730,
-    startDate: '2024-05-01',
-    dueDate: '2026-05-01',
-    status: 'Active',
-    totalOwed: 189000,
+    totalOwed: 15100,         // principal + ~30 days interest
+    marginCallThreshold: 0.80,
+    liquidationThreshold: 0.85,
   },
 ];
 
@@ -105,4 +110,3 @@ export const resetToDefaults = () => {
 };
 
 export const LTV_RATIO = 0.7;
-export const MIN_DEPOSIT = 1000;

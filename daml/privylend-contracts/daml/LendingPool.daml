@@ -1,0 +1,22 @@
+module LendingPool where
+
+-- Lending pool with available assets
+template Pool
+  with
+    poolOperator : Party
+    availableUSDC : Decimal
+    availableCBTC : Decimal
+    totalLoaned : Decimal
+  where
+    signatory poolOperator
+
+    choice ProvideLiquidity : ContractId Pool
+      with
+        asset : Text
+        amount : Decimal
+      controller poolOperator
+      do
+        case asset of
+          "USDC" -> create this with availableUSDC = availableUSDC + amount
+          "cBTC" -> create this with availableCBTC = availableCBTC + amount
+          _ -> create this

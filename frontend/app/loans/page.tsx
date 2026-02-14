@@ -14,10 +14,8 @@ export default function LoansPage() {
   const { loans, api, refreshData } = usePrivyLend();
   const [repaymentSuccess, setRepaymentSuccess] = useState(false);
   const [repaymentError, setRepaymentError] = useState<string | null>(null);
-  const [repayingLoanId, setRepayingLoanId] = useState<string | null>(null);
   const [displayLoans, setDisplayLoans] = useState<Loan[]>([]);
 
-  // Load data on mount
   useEffect(() => {
     if (USE_MOCK_DATA || !api) {
       setDisplayLoans(loadLoans());
@@ -28,34 +26,27 @@ export default function LoansPage() {
 
   const handleRepay = async (loanId: string, amount: number) => {
     if (USE_MOCK_DATA || !api) {
-      // Mock mode
       setRepaymentSuccess(true);
       setTimeout(() => setRepaymentSuccess(false), 3000);
       return;
     }
 
     setRepaymentError(null);
-    setRepayingLoanId(loanId);
 
     try {
       await api.repayLoan(loanId, amount);
       setRepaymentSuccess(true);
       await refreshData();
-      setTimeout(() => {
-        setRepaymentSuccess(false);
-      }, 3000);
+      setTimeout(() => setRepaymentSuccess(false), 3000);
     } catch (err) {
       setRepaymentError(err instanceof Error ? err.message : 'Failed to repay loan');
-      console.error('Repayment error:', err);
-    } finally {
-      setRepayingLoanId(null);
     }
   };
 
-  const activeLoans = displayLoans.filter(l => l.status === 'Active' || l.status === 'Due Soon');
-  const totalOwed = activeLoans.reduce((sum, loan) => sum + loan.totalOwed, 0);
-  const avgInterest = activeLoans.length > 0
-    ? activeLoans.reduce((sum, loan) => sum + loan.interestRate, 0) / activeLoans.length
+  const activeLoans = displayLoans.filter(l => l.status === 'Active' || l.status === 'MarginCall');
+  const totalOwed = activeLoans.reduce((sum, loan) => sum + loan.outstandingBalance, 0);
+  const avgLTV = activeLoans.length > 0
+    ? activeLoans.reduce((sum, loan) => sum + loan.currentLTV, 0) / activeLoans.length
     : 0;
 
   return (
@@ -63,7 +54,7 @@ export default function LoansPage() {
       <div className="text-center space-y-2">
         <h1 className="text-3xl font-semibold text-slate-900 tracking-tight">My Loans</h1>
         <p className="text-slate-600">
-          Manage your active loans and repayment schedule
+          Manage your active loans and monitor LTV risk
         </p>
       </div>
 
@@ -87,7 +78,7 @@ export default function LoansPage() {
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              Loan repaid successfully! Your collateral has been unlocked.
+              Payment processed! Your LTV has been updated.
             </p>
           </CardContent>
         </Card>
@@ -114,7 +105,7 @@ export default function LoansPage() {
         <Card className="border-slate-200 shadow-sm">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium text-slate-600 uppercase tracking-wider">Total Amount Owed</CardTitle>
+              <CardTitle className="text-sm font-medium text-slate-600 uppercase tracking-wider">Total Outstanding</CardTitle>
               <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center">
                 <svg className="w-5 h-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -124,14 +115,14 @@ export default function LoansPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-slate-900 mb-1 font-numeric">{formatCurrency(totalOwed)}</div>
-            <p className="text-xs text-slate-500">Principal + Interest</p>
+            <p className="text-xs text-slate-500">Outstanding balance</p>
           </CardContent>
         </Card>
 
         <Card className="border-slate-200 shadow-sm">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium text-slate-600 uppercase tracking-wider">Average Interest</CardTitle>
+              <CardTitle className="text-sm font-medium text-slate-600 uppercase tracking-wider">Average LTV</CardTitle>
               <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center">
                 <svg className="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -140,8 +131,10 @@ export default function LoansPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-slate-900 mb-1 font-numeric">{avgInterest.toFixed(1)}%</div>
-            <p className="text-xs text-slate-500">Across all loans</p>
+            <div className={`text-2xl font-bold mb-1 font-numeric ${avgLTV >= 0.80 ? 'text-red-600' : avgLTV >= 0.70 ? 'text-amber-600' : 'text-green-600'}`}>
+              {(avgLTV * 100).toFixed(1)}%
+            </div>
+            <p className="text-xs text-slate-500">Margin call at 80% | Liquidation at 85%</p>
           </CardContent>
         </Card>
       </div>
@@ -167,25 +160,21 @@ export default function LoansPage() {
 
       <Card className="border-slate-200">
         <CardHeader>
-          <CardTitle className="text-xl font-semibold text-slate-900">Repayment Tips</CardTitle>
+          <CardTitle className="text-xl font-semibold text-slate-900">Risk Thresholds</CardTitle>
         </CardHeader>
         <CardContent>
           <ul className="space-y-3 text-sm text-slate-600">
-            <li className="flex items-start gap-3 p-3 rounded-lg bg-slate-50 border border-slate-200">
-              <span className="text-blue-600 font-bold mt-0.5">•</span>
-              <span className="leading-relaxed">Repay loans before the due date to avoid liquidation</span>
+            <li className="flex items-start gap-3 p-3 rounded-lg bg-green-50 border border-green-200">
+              <span className="text-green-600 font-bold mt-0.5">Safe</span>
+              <span className="leading-relaxed">LTV below 70% - Your loan is in a healthy position</span>
             </li>
-            <li className="flex items-start gap-3 p-3 rounded-lg bg-slate-50 border border-slate-200">
-              <span className="text-blue-600 font-bold mt-0.5">•</span>
-              <span className="leading-relaxed">Your collateral is automatically unlocked after repayment</span>
+            <li className="flex items-start gap-3 p-3 rounded-lg bg-amber-50 border border-amber-200">
+              <span className="text-amber-600 font-bold mt-0.5">Warning</span>
+              <span className="leading-relaxed">LTV at 80% - Margin call triggered, add collateral or make a payment</span>
             </li>
-            <li className="flex items-start gap-3 p-3 rounded-lg bg-slate-50 border border-slate-200">
-              <span className="text-blue-600 font-bold mt-0.5">•</span>
-              <span className="leading-relaxed">Interest is calculated based on the actual loan duration</span>
-            </li>
-            <li className="flex items-start gap-3 p-3 rounded-lg bg-slate-50 border border-slate-200">
-              <span className="text-blue-600 font-bold mt-0.5">•</span>
-              <span className="leading-relaxed">Early repayment may reduce total interest paid</span>
+            <li className="flex items-start gap-3 p-3 rounded-lg bg-red-50 border border-red-200">
+              <span className="text-red-600 font-bold mt-0.5">Critical</span>
+              <span className="leading-relaxed">LTV at 85% - Liquidation triggered, collateral will be seized</span>
             </li>
           </ul>
         </CardContent>
@@ -193,4 +182,3 @@ export default function LoansPage() {
     </div>
   );
 }
-

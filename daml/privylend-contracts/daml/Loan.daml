@@ -1,0 +1,96 @@
+module Loan where
+
+import Collateral
+import DA.Time
+
+-- Loan request with LTV validation
+template LoanRequest
+  with
+    borrower : Party
+    lendingPool : Party
+    collateralId : Text
+    requestedAsset : Text      -- "USDC", "USDT", "cBTC"
+    requestedAmount : Decimal
+    collateralValue : Decimal
+    interestRate : Decimal     -- Annual rate (0.08 = 8%)
+    status : Text              -- "Pending" | "Approved" | "Rejected"
+  where
+    signatory borrower
+    observer lendingPool
+
+    -- Critical: Validate LTV <= 70%
+    let loanToValue = requestedAmount / collateralValue
+    ensure loanToValue <= 0.70
+
+    choice ApproveLoan : ContractId ActiveLoan
+      controller lendingPool
+      do
+        currentTime <- getTime
+        create ActiveLoan with
+          borrower = borrower
+          lender = lendingPool
+          loanAsset = requestedAsset
+          principal = requestedAmount
+          outstandingBalance = requestedAmount
+          collateralValue = collateralValue
+          currentLTV = loanToValue
+          interestRate = interestRate
+          startDate = currentTime
+          dueDate = addRelTime currentTime (days 30)
+          status = "Active"
+          marginCallThreshold = 0.80
+          liquidationThreshold = 0.85
+
+-- Active loan with risk monitoring
+template ActiveLoan
+  with
+    borrower : Party
+    lender : Party
+    loanAsset : Text
+    principal : Decimal
+    outstandingBalance : Decimal
+    collateralValue : Decimal
+    currentLTV : Decimal
+    interestRate : Decimal
+    startDate : Time
+    dueDate : Time
+    status : Text              -- "Active" | "MarginCall" | "Liquidating" | "Repaid"
+    marginCallThreshold : Decimal
+    liquidationThreshold : Decimal
+  where
+    signatory borrower, lender
+
+    choice UpdateCollateralValue : ContractId ActiveLoan
+      with
+        newCollateralValue : Decimal
+      controller lender
+      do
+        let newLTV = outstandingBalance / newCollateralValue
+        let newStatus =
+              if newLTV >= liquidationThreshold then "Liquidating"
+              else if newLTV >= marginCallThreshold then "MarginCall"
+              else "Active"
+
+        create this with
+          collateralValue = newCollateralValue
+          currentLTV = newLTV
+          status = newStatus
+
+    choice MakePayment : ContractId ActiveLoan
+      with
+        paymentAmount : Decimal
+      controller borrower
+      do
+        let newBalance = outstandingBalance - paymentAmount
+
+        if newBalance <= 0.0
+          then create this with outstandingBalance = 0.0, status = "Repaid"
+          else create this with
+                 outstandingBalance = newBalance
+                 currentLTV = newBalance / collateralValue
+
+    choice TriggerLiquidation : ()
+      controller lender
+      do
+        assertMsg "LTV not at threshold" (currentLTV >= liquidationThreshold)
+        return ()

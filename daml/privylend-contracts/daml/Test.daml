@@ -1,0 +1,82 @@
+module Test where
+
+import Daml.Script
+import Asset
+import Collateral
+import Loan
+import LendingPool
+import DA.Date
+import DA.Time
+
+-- Complete workflow test
+testCompleteFlow : Script ()
+testCompleteFlow = script do
+  -- Setup
+  alice <- allocateParty "Alice"
+  pool <- allocateParty "PrivyLendPool"
+
+  debug "=== 1. Create Lending Pool ==="
+  poolContract <- submit pool do
+    createCmd Pool with
+      poolOperator = pool
+      availableUSDC = 1000000.0
+      availableCBTC = 10.0
+      totalLoaned = 0.0
+
+  debug "=== 2. Alice Deposits 1 cBTC Collateral ==="
+  aliceCollateral <- submit alice do
+    createCmd CollateralAccount with
+      owner = alice
+      assetType = "cBTC"
+      quantity = 1.0
+      marketPrice = 60000.0
+      haircut = 0.20
+      effectiveValue = 48000.0  -- 60k * 0.8
+      isLocked = False
+      depositTimestamp = datetime 2026 Jan 1 0 0 0
+
+  debug "    Effective value: $48,000 (after 20% haircut)"
+
+  debug "=== 3. Alice Requests $30k USDC Loan ==="
+  loanRequest <- submit alice do
+    createCmd LoanRequest with
+      borrower = alice
+      lendingPool = pool
+      collateralId = "COL-001"
+      requestedAsset = "USDC"
+      requestedAmount = 30000.0
+      collateralValue = 48000.0
+      interestRate = 0.08
+      status = "Pending"
+
+  debug "    LTV: 62.5% - Safe"
+
+  debug "=== 4. Pool Approves Loan ==="
+  activeLoan <- submit pool do
+    exerciseCmd loanRequest ApproveLoan
+
+  debug "    Loan approved! Alice receives $30k USDC"
+
+  debug "=== 5. Price Drop: cBTC falls to $50k ==="
+  updatedLoan <- submit pool do
+    exerciseCmd activeLoan UpdateCollateralValue with
+      newCollateralValue = 40000.0  -- 50k * 0.8
+
+  debug "    New LTV: 75% - Getting close"
+
+  debug "=== 6. Bigger Drop: cBTC falls to $45k ==="
+  marginCallLoan <- submit pool do
+    exerciseCmd updatedLoan UpdateCollateralValue with
+      newCollateralValue = 36000.0  -- 45k * 0.8
+
+  debug "    New LTV: 83.3% - MARGIN CALL!"
+
+  debug "=== 7. Alice Pays Back $5k ==="
+  repaidLoan <- submit alice do
+    exerciseCmd marginCallLoan MakePayment with paymentAmount = 5000.0
+
+  debug "    New outstanding: $25k"
+  debug "    New LTV: 69.4% - Safe again!"
+
+  debug "=== TEST COMPLETED SUCCESSFULLY ==="
+  debug "Alice's loan is now safe after partial repayment"

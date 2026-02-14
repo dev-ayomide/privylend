@@ -1,115 +1,153 @@
 import { Party } from './daml';
-import { CollateralAccount, Loan, AssetType } from './types';
-
-// Map Daml AssetType to frontend AssetType
-const mapAssetType = (damlType: string): AssetType => {
-  // Daml enum values come as "Main:Crypto", "Main:RealEstate", etc.
-  if (damlType.includes('Crypto')) return 'Cryptocurrency';
-  if (damlType.includes('RealEstate')) return 'Real Estate';
-  if (damlType.includes('Securities')) return 'Securities';
-  if (damlType.includes('Commodities')) return 'Commodities';
-  return 'Cryptocurrency'; // default
-};
-
-// Map frontend AssetType to Daml AssetType
-const toDamlAssetType = (assetType: AssetType): string => {
-  const mapping: Record<AssetType, string> = {
-    'Cryptocurrency': 'Crypto',
-    'Real Estate': 'RealEstate',
-    'Securities': 'Securities',
-    'Commodities': 'Commodities',
-  };
-  return `Main:${mapping[assetType]}`;
-};
-
-// Map Daml LoanStatus to frontend LoanStatus
-const mapLoanStatus = (status: string, dueDate: Date): Loan['status'] => {
-  if (status.includes('Repaid')) return 'Repaid';
-  if (status.includes('Defaulted')) return 'Defaulted';
-  if (status.includes('Active')) {
-    const daysUntilDue = Math.ceil((dueDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-    return daysUntilDue <= 30 ? 'Due Soon' : 'Active';
-  }
-  return 'Active';
-};
-
-// Calculate total owed for a loan
-const calculateTotalOwed = (
-  principal: number,
-  interestRate: number,
-  startDate: Date,
-  dueDate: Date
-): number => {
-  const daysDiff = Math.ceil((dueDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-  const years = daysDiff / 365.0;
-  const interest = principal * (interestRate / 100.0) * years;
-  return principal + interest;
-};
-
-// Parse Daml Date string (format: "YYYY-MM-DD")
-const parseDamlDate = (dateStr: string): Date => {
-  return new Date(dateStr + 'T00:00:00Z');
-};
+import { CollateralAccount, Loan, AssetType, ASSET_CONFIG } from './types';
+import * as CantonClient from './canton-client';
 
 export class PrivyLendAPI {
   private party: Party;
+  private token?: string;
 
   constructor(party: Party, token?: string) {
     this.party = party;
+    this.token = token;
   }
 
   // Fetch collateral accounts
   async getCollateralAccounts(): Promise<CollateralAccount[]> {
-    // In demo mode, this would connect to Canton
-    // For now, returning empty array as mock data is used
-    return [];
+    try {
+      const contracts = await CantonClient.getCollateral(this.party);
+      // Transform Canton contracts to our CollateralAccount type
+      return contracts.map((c: any) => ({
+        id: c.contractId,
+        assetType: c.payload.assetType as AssetType,
+        quantity: parseFloat(c.payload.quantity),
+        marketPrice: parseFloat(c.payload.marketPrice),
+        haircut: parseFloat(c.payload.haircut),
+        effectiveValue: parseFloat(c.payload.effectiveValue),
+        status: c.payload.isLocked ? 'Locked' : 'Available',
+        depositTimestamp: c.payload.depositTimestamp,
+      }));
+    } catch (error) {
+      console.error('Error fetching collateral accounts:', error);
+      return [];
+    }
   }
 
-  // Fetch active loans
+  // Fetch active loans (both LoanRequests and ActiveLoans from Canton)
   async getActiveLoans(): Promise<Loan[]> {
-    // In demo mode, this would connect to Canton
-    // For now, returning empty array as mock data is used
-    return [];
+    try {
+      const [loanRequests, activeLoans] = await Promise.all([
+        CantonClient.getLoanRequests(this.party),
+        CantonClient.getActiveLoansFromCanton(this.party),
+      ]);
+
+      // Transform LoanRequest contracts
+      const requests: Loan[] = loanRequests.map((c: any) => ({
+        id: c.contractId,
+        collateralId: c.payload.collateralId,
+        loanAsset: c.payload.requestedAsset as AssetType,
+        principal: parseFloat(c.payload.requestedAmount),
+        outstandingBalance: parseFloat(c.payload.requestedAmount),
+        collateralValue: parseFloat(c.payload.collateralValue),
+        currentLTV: parseFloat(c.payload.requestedAmount) / parseFloat(c.payload.collateralValue),
+        interestRate: parseFloat(c.payload.interestRate),
+        startDate: new Date().toISOString().split('T')[0],
+        dueDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+        status: 'Active' as const,
+        totalOwed: parseFloat(c.payload.requestedAmount) * 1.08,
+        marginCallThreshold: 0.80,
+        liquidationThreshold: 0.85,
+      }));
+
+      // Transform ActiveLoan contracts
+      const active: Loan[] = activeLoans.map((c: any) => ({
+        id: c.contractId,
+        collateralId: '',
+        loanAsset: c.payload.loanAsset as AssetType,
+        principal: parseFloat(c.payload.principal),
+        outstandingBalance: parseFloat(c.payload.outstandingBalance),
+        collateralValue: parseFloat(c.payload.collateralValue),
+        currentLTV: parseFloat(c.payload.currentLTV),
+        interestRate: parseFloat(c.payload.interestRate),
+        startDate: c.payload.startDate,
+        dueDate: c.payload.dueDate,
+        status: c.payload.status as Loan['status'],
+        totalOwed: parseFloat(c.payload.outstandingBalance),
+        marginCallThreshold: parseFloat(c.payload.marginCallThreshold),
+        liquidationThreshold: parseFloat(c.payload.liquidationThreshold),
+      }));
+
+      return [...requests, ...active];
+    } catch (error) {
+      console.error('Error fetching active loans:', error);
+      return [];
+    }
   }
 
   // Deposit collateral
   async depositCollateral(
     assetType: AssetType,
-    amount: number
+    quantity: number
   ): Promise<string> {
-    // In demo mode, this would create a contract on Canton
-    return 'mock-contract-id';
+    try {
+      const config = ASSET_CONFIG[assetType];
+      const result = await CantonClient.depositCollateral(
+        this.party,
+        assetType,
+        quantity,
+        config.price
+      );
+      console.log('Collateral deposited successfully:', result);
+      return result.contractId || 'created';
+    } catch (error) {
+      console.error('Error depositing collateral:', error);
+      throw error;
+    }
   }
 
   // Request a loan
   async requestLoan(
     collateralId: string,
     amount: number,
-    termDays: number,
-    lender: Party,
-    interestRate: number = 5.0
+    collateralValue: number,
+    requestedAsset: AssetType = 'USDC',
+    interestRate: number = 0.08
   ): Promise<string> {
-    // In demo mode, this would create a loan request on Canton
-    return 'mock-loan-id';
+    try {
+      const result = await CantonClient.requestLoan(
+        this.party,
+        collateralId,
+        requestedAsset,
+        amount,
+        collateralValue
+      );
+      console.log('Loan requested successfully:', result);
+      return result.contractId || 'created';
+    } catch (error) {
+      console.error('Error requesting loan:', error);
+      throw error;
+    }
   }
 
-  // Repay a loan
+  // Repay a loan (make payment)
   async repayLoan(loanId: string, amount: number): Promise<void> {
-    // In demo mode, this would exercise a choice on Canton
-    return;
+    try {
+      await CantonClient.makePayment(loanId, amount);
+      console.log('Payment made successfully');
+    } catch (error) {
+      console.error('Error making payment:', error);
+      throw error;
+    }
   }
 
-  // Get available lenders (lending pools)
+  // Get available lending pools
   async getLendingPools(): Promise<Array<{ id: string; owner: Party; name: string; availableFunds: number }>> {
-    // In demo mode, this would query Canton
+    // TODO: Implement Canton query for Pool contracts
     return [];
   }
 
   // Withdraw collateral
   async withdrawCollateral(collateralId: string): Promise<void> {
-    // In demo mode, this would exercise a choice on Canton
+    // TODO: Implement Canton exercise for UnlockCollateral
     return;
   }
 }
-
-

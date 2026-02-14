@@ -7,17 +7,23 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/lib/utils';
 import { usePrivyLend } from '@/hooks/usePrivyLend';
-import { AssetType } from '@/lib/types';
+import { AssetType, ASSET_CONFIG } from '@/lib/types';
 
 const USE_MOCK_DATA = process.env.NEXT_PUBLIC_USE_MOCK_DATA !== 'false';
 
 export default function DepositPage() {
-  const [amount, setAmount] = useState('');
-  const [assetType, setAssetType] = useState<AssetType>('Cryptocurrency');
+  const [quantity, setQuantity] = useState('');
+  const [assetType, setAssetType] = useState<AssetType>('cBTC');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { api, refreshData } = usePrivyLend();
+  const { api } = usePrivyLend();
+
+  const config = ASSET_CONFIG[assetType];
+  const qty = parseFloat(quantity || '0');
+  const rawValue = qty * config.price;
+  const effectiveValue = rawValue * (1 - config.haircut);
+  const maxBorrowable = effectiveValue * 0.70;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,41 +31,38 @@ export default function DepositPage() {
     setIsSubmitting(true);
 
     if (USE_MOCK_DATA || !api) {
-      // Mock mode - actually add to localStorage
       const { addCollateral } = await import('@/lib/mockData');
       setTimeout(() => {
-        const amountNum = parseFloat(amount);
         addCollateral({
           assetType,
-          value: amountNum,
+          quantity: qty,
+          marketPrice: config.price,
+          haircut: config.haircut,
+          effectiveValue,
           status: 'Available',
+          depositTimestamp: new Date().toISOString(),
         });
         setIsSubmitting(false);
         setSuccess(true);
-        setAmount('');
+        setQuantity('');
         setTimeout(() => {
           setSuccess(false);
-          window.location.reload(); // Reload to show new data
+          window.location.reload();
         }, 1500);
       }, 1000);
       return;
     }
 
     try {
-      const amountNum = parseFloat(amount);
-      if (amountNum < 1000) {
-        throw new Error('Minimum deposit is $1,000');
+      if (qty <= 0) {
+        throw new Error('Quantity must be positive');
       }
-
-      await api.depositCollateral(assetType, amountNum);
+      await api.depositCollateral(assetType, qty);
       setSuccess(true);
-      setAmount('');
-      await refreshData(); // Refresh data after deposit
-      
+      setQuantity('');
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to deposit collateral');
-      console.error('Deposit error:', err);
     } finally {
       setIsSubmitting(false);
     }
@@ -70,7 +73,7 @@ export default function DepositPage() {
       <div className="text-center space-y-2">
         <h1 className="text-3xl font-semibold text-slate-900 tracking-tight">Deposit Collateral</h1>
         <p className="text-slate-600">
-          Deposit assets to use as collateral for loans
+          Deposit Canton-native assets to use as collateral for loans
         </p>
       </div>
 
@@ -78,7 +81,7 @@ export default function DepositPage() {
         <CardHeader>
           <CardTitle className="text-xl font-semibold text-slate-900">New Collateral Deposit</CardTitle>
           <CardDescription>
-            Your collateral is secured on the blockchain with privacy guarantees
+            Your collateral is secured on Canton with privacy guarantees
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -92,44 +95,56 @@ export default function DepositPage() {
                 className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 required
               >
-                <option value="Cryptocurrency">Cryptocurrency</option>
-                <option value="Real Estate">Real Estate</option>
-                <option value="Securities">Securities</option>
-                <option value="Commodities">Commodities</option>
+                <option value="cBTC">cBTC - Canton Bitcoin</option>
+                <option value="cETH">cETH - Canton Ethereum</option>
+                <option value="USDC">USDC - USD Coin</option>
+                <option value="USDT">USDT - Tether</option>
               </select>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="amount" className="text-sm font-medium text-slate-700">Collateral Value</Label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm font-medium">$</span>
-                <Input
-                  id="amount"
-                  type="number"
-                  placeholder="0.00"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  min={1000}
-                  step={1000}
-                  className="pl-8 font-numeric"
-                  required
-                />
-              </div>
+              <Label htmlFor="quantity" className="text-sm font-medium text-slate-700">Quantity</Label>
+              <Input
+                id="quantity"
+                type="number"
+                placeholder="0.00"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                min={0}
+                step="any"
+                className="font-numeric"
+                required
+              />
               <p className="text-xs text-slate-500">
-                Minimum deposit: <span className="text-blue-600 font-medium font-numeric">{formatCurrency(1000)}</span>
+                Current price: <span className="text-blue-600 font-medium font-numeric">{formatCurrency(config.price)}</span> per {assetType}
               </p>
             </div>
 
-            {amount && parseFloat(amount) > 0 && (
+            {qty > 0 && (
               <Card className="border-blue-200 bg-blue-50">
-                <CardContent className="pt-6">
-                  <h3 className="font-semibold text-sm text-slate-700 mb-2 uppercase tracking-wider">Estimated Loan Capacity</h3>
-                  <p className="text-2xl font-bold text-slate-900 mb-1 font-numeric">
-                    {formatCurrency(parseFloat(amount) * 0.7)}
-                  </p>
-                  <p className="text-xs text-slate-600">
-                    Up to 70% LTV ratio
-                  </p>
+                <CardContent className="pt-6 space-y-3">
+                  <div>
+                    <p className="text-sm text-slate-600">Raw Value:</p>
+                    <p className="text-2xl font-bold text-slate-900 font-numeric">
+                      {formatCurrency(rawValue)}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-sm text-slate-600">
+                      Effective Value (after {config.haircut * 100}% haircut):
+                    </p>
+                    <p className="text-xl font-semibold text-emerald-600 font-numeric">
+                      {formatCurrency(effectiveValue)}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-sm text-slate-600">Max Borrowable (70% LTV):</p>
+                    <p className="text-lg font-semibold text-indigo-600 font-numeric">
+                      {formatCurrency(maxBorrowable)}
+                    </p>
+                  </div>
                 </CardContent>
               </Card>
             )}
@@ -160,10 +175,10 @@ export default function DepositPage() {
               </Card>
             )}
 
-            <Button 
-              type="submit" 
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white" 
-              disabled={isSubmitting || !amount}
+            <Button
+              type="submit"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+              disabled={isSubmitting || !quantity || qty <= 0}
             >
               {isSubmitting ? 'Processing...' : 'Deposit Collateral'}
             </Button>
@@ -181,25 +196,25 @@ export default function DepositPage() {
               <svg className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <span className="leading-relaxed">Your identity remains private on the blockchain</span>
+              <span className="leading-relaxed">Only you and the lending pool see your transaction details</span>
             </li>
             <li className="flex items-start gap-3 p-3 rounded-lg bg-slate-50 border border-slate-200">
               <svg className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <span className="leading-relaxed">Asset details are encrypted and only visible to authorized parties</span>
+              <span className="leading-relaxed">Canton-native assets secured by Daml smart contracts</span>
             </li>
             <li className="flex items-start gap-3 p-3 rounded-lg bg-slate-50 border border-slate-200">
               <svg className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <span className="leading-relaxed">Smart contracts ensure your collateral is secure</span>
+              <span className="leading-relaxed">Risk-adjusted haircuts protect against market volatility</span>
             </li>
             <li className="flex items-start gap-3 p-3 rounded-lg bg-slate-50 border border-slate-200">
               <svg className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <span className="leading-relaxed">Regulatory compliance without sacrificing privacy</span>
+              <span className="leading-relaxed">Automatic LTV monitoring with margin call protection</span>
             </li>
           </ul>
         </CardContent>
@@ -207,4 +222,3 @@ export default function DepositPage() {
     </div>
   );
 }
-

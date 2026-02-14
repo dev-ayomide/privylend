@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run build:*)",
+      "Bash(daml.cmd json-api:*)"
+    ]
+  }
+}

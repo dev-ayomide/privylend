@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { formatCurrency, calculateMaxLoan } from '@/lib/utils';
 import { LTV_RATIO } from '@/lib/mockData';
+import { INTEREST_RATE } from '@/lib/types';
 
 interface LoanFormProps {
   collateralValue: number;
@@ -15,15 +16,14 @@ interface LoanFormProps {
 
 export function LoanForm({ collateralValue, onSubmit }: LoanFormProps) {
   const [amount, setAmount] = useState('');
-  const [termDays, setTermDays] = useState('365');
-  const [interestRate] = useState(5.0);
+  const [termDays, setTermDays] = useState('30');
 
   const maxLoan = calculateMaxLoan(collateralValue, LTV_RATIO);
   const requestedAmount = parseFloat(amount) || 0;
   const ltv = collateralValue > 0 ? (requestedAmount / collateralValue) * 100 : 0;
   const isValidLTV = ltv <= 70 && requestedAmount > 0;
 
-  const estimatedInterest = (requestedAmount * (interestRate / 100) * (parseInt(termDays) / 365));
+  const estimatedInterest = requestedAmount * INTEREST_RATE * (parseInt(termDays) / 365);
   const totalRepayment = requestedAmount + estimatedInterest;
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -32,7 +32,7 @@ export function LoanForm({ collateralValue, onSubmit }: LoanFormProps) {
       onSubmit({
         amount: requestedAmount,
         termDays: parseInt(termDays),
-        interestRate,
+        interestRate: INTEREST_RATE,
       });
     }
   };
@@ -48,7 +48,7 @@ export function LoanForm({ collateralValue, onSubmit }: LoanFormProps) {
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="space-y-2">
-            <Label htmlFor="collateral" className="text-sm font-medium text-slate-700">Collateral Value</Label>
+            <Label htmlFor="collateral" className="text-sm font-medium text-slate-700">Collateral Effective Value</Label>
             <Input
               id="collateral"
               type="text"
@@ -70,7 +70,7 @@ export function LoanForm({ collateralValue, onSubmit }: LoanFormProps) {
                 onChange={(e) => setAmount(e.target.value)}
                 max={maxLoan}
                 min={0}
-                step={1000}
+                step={100}
                 className="pl-8 pr-20 font-numeric"
                 required
               />
@@ -100,10 +100,10 @@ export function LoanForm({ collateralValue, onSubmit }: LoanFormProps) {
               onChange={(e) => setTermDays(e.target.value)}
               className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
+              <option value="30">30 days (1 month)</option>
               <option value="90">90 days (3 months)</option>
               <option value="180">180 days (6 months)</option>
               <option value="365">365 days (1 year)</option>
-              <option value="730">730 days (2 years)</option>
             </select>
           </div>
 
@@ -112,7 +112,7 @@ export function LoanForm({ collateralValue, onSubmit }: LoanFormProps) {
             <Input
               id="rate"
               type="text"
-              value={`${interestRate}% APR`}
+              value={`${(INTEREST_RATE * 100).toFixed(0)}% APR`}
               disabled
               className="bg-slate-50 text-slate-600 font-numeric"
             />
@@ -121,9 +121,17 @@ export function LoanForm({ collateralValue, onSubmit }: LoanFormProps) {
           <div className="border-t border-slate-200 pt-5 space-y-4">
             <div className="flex justify-between items-center text-sm">
               <span className="text-slate-600">Current LTV:</span>
-              <span className={`${ltv > 70 ? 'text-red-600' : 'text-slate-900'} font-semibold font-numeric`}>
+              <span className={`${ltv > 70 ? 'text-red-600' : ltv > 60 ? 'text-amber-600' : 'text-green-600'} font-semibold font-numeric`}>
                 {ltv.toFixed(1)}%
               </span>
+            </div>
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-slate-600">Margin Call at:</span>
+              <span className="text-slate-900 font-semibold font-numeric">80% LTV</span>
+            </div>
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-slate-600">Liquidation at:</span>
+              <span className="text-slate-900 font-semibold font-numeric">85% LTV</span>
             </div>
             <div className="flex justify-between items-center text-sm">
               <span className="text-slate-600">Estimated Interest:</span>
@@ -135,9 +143,9 @@ export function LoanForm({ collateralValue, onSubmit }: LoanFormProps) {
             </div>
           </div>
 
-          <Button 
-            type="submit" 
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white" 
+          <Button
+            type="submit"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
             disabled={!isValidLTV}
           >
             Request Loan
@@ -147,4 +155,3 @@ export function LoanForm({ collateralValue, onSubmit }: LoanFormProps) {
     </form>
   );
 }
-

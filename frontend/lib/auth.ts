@@ -1,11 +1,12 @@
 import { Party } from '@daml/types';
 
 // In production, you'd use proper authentication
-// For now, store party in localStorage or session
+// For now, use localStorage or fall back to default party
 export const getCurrentParty = (): Party | null => {
   if (typeof window === 'undefined') return null;
   const party = localStorage.getItem('daml_party');
-  return party as Party | null;
+  // Fall back to Canton party from env var for development
+  return (party || process.env.NEXT_PUBLIC_CANTON_PARTY || 'Alice') as Party;
 };
 
 export const setCurrentParty = (party: Party): void => {
@@ -15,7 +16,9 @@ export const setCurrentParty = (party: Party): void => {
 
 export const getAuthToken = (): string | null => {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem('daml_token');
+  const token = localStorage.getItem('daml_token');
+  // Fall back to environment variable token for development
+  return token || process.env.NEXT_PUBLIC_LEDGER_TOKEN || null;
 };
 
 export const setAuthToken = (token: string): void => {

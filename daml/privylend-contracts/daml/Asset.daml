@@ -1,0 +1,18 @@
+module Asset where
+
+-- Represents Canton-native assets (cBTC, cETH, USDC, USDT)
+template AssetToken
+  with
+    owner : Party
+    assetType : Text        -- "cBTC", "cETH", "USDC", "USDT"
+    quantity : Decimal
+    issuer : Party
+  where
+    signatory owner, issuer
+
+    choice Transfer : ContractId AssetToken
+      with
+        newOwner : Party
+      controller owner
+      do
+        create this with owner = newOwner
