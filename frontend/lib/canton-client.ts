@@ -375,13 +375,18 @@ export async function updateCollateralPrice(collateralId: string, newPrice: numb
 }
 
 // Update collateral value on loan (for LTV monitoring)
-export async function updateLoanCollateralValue(loanId: string, newCollateralValue: number) {
+export async function updateLoanCollateralValue(loanId: string, newCollateralValue: number, token?: string) {
   try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const result = await fetch(`${process.env.NEXT_PUBLIC_LEDGER_URL}?endpoint=/v1/exercise`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({
         templateId: `${PACKAGE_ID}:Loan:ActiveLoan`,
         contractId: loanId,
@@ -462,5 +467,67 @@ export async function approveLoan(loanRequestId: string, token?: string) {
   } catch (error) {
     console.error('Error approving loan:', error);
     throw error;
+  }
+}
+
+// Query all collateral accounts (admin view - no owner filter)
+export async function getAllCollateral(token?: string) {
+  try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const result = await fetch(`${process.env.NEXT_PUBLIC_LEDGER_URL}?endpoint=/v1/query`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        templateIds: [`${PACKAGE_ID}:Collateral:CollateralAccount`],
+        query: {} // No filter - get all collateral
+      }),
+    });
+
+    if (!result.ok) {
+      throw new Error(`Query failed: ${result.status}`);
+    }
+
+    const data = await result.json();
+    return data.result || [];
+  } catch (error) {
+    console.error('Error querying all collateral:', error);
+    return [];
+  }
+}
+
+// Query all active loans (admin view - no borrower filter)
+export async function getAllActiveLoans(token?: string) {
+  try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const result = await fetch(`${process.env.NEXT_PUBLIC_LEDGER_URL}?endpoint=/v1/query`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        templateIds: [`${PACKAGE_ID}:Loan:ActiveLoan`],
+        query: {} // No filter - get all active loans
+      }),
+    });
+
+    if (!result.ok) {
+      throw new Error(`Query failed: ${result.status}`);
+    }
+
+    const data = await result.json();
+    return data.result || [];
+  } catch (error) {
+    console.error('Error querying all active loans:', error);
+    return [];
   }
 }

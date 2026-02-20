@@ -58,6 +58,41 @@ export default function LoansPage() {
         </p>
       </div>
 
+      {/* Critical Alert Banner for At-Risk Loans */}
+      {displayLoans.some(l => l.status === 'MarginCall' || l.status === 'Liquidating') && (
+        <Card className="border-red-200 bg-red-50 shadow-md">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-3">
+              <svg className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+              <div className="flex-1">
+                <p className="text-red-700 font-bold text-lg mb-1">⚠️ URGENT: Loans at Risk of Liquidation!</p>
+                <p className="text-red-600 font-medium">
+                  You have {displayLoans.filter(l => l.status === 'MarginCall' || l.status === 'Liquidating').length} loan(s)
+                  {displayLoans.some(l => l.status === 'Liquidating') ? ' in liquidation process' : ' above 80% LTV'}.
+                  <strong className="ml-1">Take immediate action to avoid collateral seizure:</strong>
+                </p>
+                <ul className="mt-3 space-y-1 text-sm text-red-700">
+                  <li className="flex items-center gap-2">
+                    <span className="font-bold">1.</span>
+                    <span>Make a payment to reduce your outstanding balance, OR</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="font-bold">2.</span>
+                    <span>Add more collateral to increase your collateral value</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="font-bold">⏱️</span>
+                    <span><strong>Liquidation threshold: 85% LTV</strong> - Collateral will be seized automatically</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {repaymentError && (
         <Card className="border-red-200 bg-red-50">
           <CardContent className="pt-6">

@@ -79,10 +79,34 @@ export function LoanTable({ loans, onRepay }: LoanTableProps) {
   };
 
   const getLTVColor = (ltv: number) => {
-    if (ltv >= 0.85) return 'text-red-600';
-    if (ltv >= 0.80) return 'text-amber-600';
+    if (ltv >= 0.85) return 'text-red-600 font-bold';
+    if (ltv >= 0.80) return 'text-amber-600 font-bold';
     if (ltv >= 0.70) return 'text-yellow-600';
     return 'text-green-600';
+  };
+
+  const getLTVWarning = (ltv: number) => {
+    if (ltv >= 0.85) {
+      return (
+        <span className="inline-flex items-center gap-1 ml-2 text-red-600 text-xs font-semibold">
+          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+          </svg>
+          LIQUIDATING
+        </span>
+      );
+    }
+    if (ltv >= 0.80) {
+      return (
+        <span className="inline-flex items-center gap-1 ml-2 text-amber-600 text-xs font-semibold">
+          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+          </svg>
+          MARGIN CALL
+        </span>
+      );
+    }
+    return null;
   };
 
   if (loans.length === 0) {
@@ -119,9 +143,12 @@ export function LoanTable({ loans, onRepay }: LoanTableProps) {
                   {formatCurrency(loan.outstandingBalance)}
                 </TableCell>
                 <TableCell>
-                  <span className={`font-semibold font-numeric ${getLTVColor(loan.currentLTV)}`}>
-                    {(loan.currentLTV * 100).toFixed(1)}%
-                  </span>
+                  <div className="flex items-center">
+                    <span className={`font-semibold font-numeric ${getLTVColor(loan.currentLTV)}`}>
+                      {(loan.currentLTV * 100).toFixed(1)}%
+                    </span>
+                    {getLTVWarning(loan.currentLTV)}
+                  </div>
                 </TableCell>
                 <TableCell className="text-slate-600 font-numeric">{(loan.interestRate * 100).toFixed(0)}%</TableCell>
                 <TableCell className="text-slate-600">{formatDate(loan.dueDate)}</TableCell>

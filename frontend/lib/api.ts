@@ -231,7 +231,7 @@ export class PrivyLendAPI {
   // Update loan collateral value (for LTV monitoring)
   async updateLoanCollateralValue(loanId: string, newCollateralValue: number): Promise<void> {
     try {
-      await CantonClient.updateLoanCollateralValue(loanId, newCollateralValue);
+      await CantonClient.updateLoanCollateralValue(loanId, newCollateralValue, this.token);
       console.log('Loan collateral value updated successfully');
     } catch (error) {
       console.error('Error updating loan collateral value:', error);
@@ -259,6 +259,55 @@ export class PrivyLendAPI {
     } catch (error) {
       console.error('Error approving loan:', error);
       throw error;
+    }
+  }
+
+  // Get all collateral accounts (admin only - for price oracle)
+  async getAllCollateralAccounts(): Promise<CollateralAccount[]> {
+    try {
+      const contracts = await CantonClient.getAllCollateral(this.token);
+      // Transform Canton contracts to our CollateralAccount type
+      return contracts.map((c: any) => ({
+        id: c.contractId,
+        assetType: c.payload.assetType as AssetType,
+        quantity: parseFloat(c.payload.quantity),
+        marketPrice: parseFloat(c.payload.marketPrice),
+        haircut: parseFloat(c.payload.haircut),
+        effectiveValue: parseFloat(c.payload.effectiveValue),
+        status: c.payload.isLocked ? 'Locked' : 'Available',
+        depositTimestamp: c.payload.depositTimestamp,
+      }));
+    } catch (error) {
+      console.error('Error fetching all collateral accounts:', error);
+      return [];
+    }
+  }
+
+  // Get all active loans (admin only - for price oracle)
+  async getAllActiveLoans(): Promise<Loan[]> {
+    try {
+      const activeLoans = await CantonClient.getAllActiveLoans(this.token);
+
+      // Transform ActiveLoan contracts
+      return activeLoans.map((c: any) => ({
+        id: c.contractId,
+        collateralId: '', // Not tracked in ActiveLoan contract
+        loanAsset: c.payload.loanAsset as AssetType,
+        principal: parseFloat(c.payload.principal),
+        outstandingBalance: parseFloat(c.payload.outstandingBalance),
+        collateralValue: parseFloat(c.payload.collateralValue),
+        currentLTV: parseFloat(c.payload.currentLTV),
+        interestRate: parseFloat(c.payload.interestRate),
+        startDate: c.payload.startDate,
+        dueDate: c.payload.dueDate,
+        status: c.payload.status as Loan['status'],
+        totalOwed: parseFloat(c.payload.outstandingBalance),
+        marginCallThreshold: parseFloat(c.payload.marginCallThreshold),
+        liquidationThreshold: parseFloat(c.payload.liquidationThreshold),
+      }));
+    } catch (error) {
+      console.error('Error fetching all active loans:', error);
+      return [];
     }
   }
 }

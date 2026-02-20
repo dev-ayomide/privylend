@@ -3,8 +3,11 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { PrivyLendAPI } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
+import { AssetType, ASSET_CONFIG, Loan } from '@/lib/types';
 
 const USE_MOCK_DATA = process.env.NEXT_PUBLIC_USE_MOCK_DATA !== 'false';
 
@@ -19,12 +22,28 @@ interface PendingLoan {
   ltv: number;
 }
 
+interface ImpactData {
+  loanId: string;
+  loanAsset: string;
+  currentLTV: number;
+  newLTV: number;
+  newCollateralValue: number;
+  statusChange: string;
+}
+
 export default function AdminPage() {
   const [api, setApi] = useState<PrivyLendAPI | null>(null);
   const [pendingLoans, setPendingLoans] = useState<PendingLoan[]>([]);
   const [loading, setLoading] = useState(true);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Price Oracle state
+  const [selectedAsset, setSelectedAsset] = useState<AssetType>('cBTC');
+  const [newPrice, setNewPrice] = useState<string>('60000');
+  const [impacts, setImpacts] = useState<ImpactData[]>([]);
+  const [updating, setUpdating] = useState<string | null>(null);
+  const [calculating, setCalculating] = useState(false);
 
   // Initialize API with Pool Party credentials
   useEffect(() => {
@@ -108,6 +127,98 @@ export default function AdminPage() {
     }
   };
 
+  // Price Oracle: Calculate impact of price change on all loans
+  const handleCalculateImpact = async () => {
+    if (USE_MOCK_DATA || !api) {
+      setError('Price oracle not available in demo mode');
+      return;
+    }
+
+    setCalculating(true);
+    setError(null);
+
+    try {
+      const price = parseFloat(newPrice);
+      if (isNaN(price) || price <= 0) {
+        setError('Please enter a valid price greater than 0');
+        return;
+      }
+
+      // Fetch all active loans
+      const loans = await api.getAllActiveLoans();
+
+      if (loans.length === 0) {
+        setError('No active loans to update');
+        setImpacts([]);
+        return;
+      }
+
+      // Get current price from ASSET_CONFIG
+      const currentPrice = ASSET_CONFIG[selectedAsset].price;
+
+      // Calculate impact for each loan
+      const impactData: ImpactData[] = loans.map(loan => {
+        // Calculate new collateral value based on price change
+        const priceRatio = price / currentPrice;
+        const newCollateralValue = loan.collateralValue * priceRatio;
+        const newLTV = loan.outstandingBalance / newCollateralValue;
+
+        // Determine status change
+        let newStatus = 'Active';
+        if (newLTV >= 0.85) newStatus = 'Liquidating';
+        else if (newLTV >= 0.80) newStatus = 'MarginCall';
+
+        return {
+          loanId: loan.id,
+          loanAsset: loan.loanAsset,
+          currentLTV: loan.currentLTV,
+          newLTV,
+          newCollateralValue,
+          statusChange: loan.status === newStatus ? 'No change' : `${loan.status} → ${newStatus}`
+        };
+      });
+
+      setImpacts(impactData);
+      setSuccess(`Calculated impact for ${impactData.length} loans`);
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to calculate impact');
+    } finally {
+      setCalculating(false);
+    }
+  };
+
+  // Price Oracle: Update a specific loan's collateral value
+  const handleUpdateLoan = async (loanId: string, newCollateralValue: number) => {
+    if (USE_MOCK_DATA || !api) {
+      return;
+    }
+
+    setUpdating(loanId);
+    setError(null);
+
+    try {
+      await api.updateLoanCollateralValue(loanId, newCollateralValue);
+      setSuccess(`Loan ${loanId.slice(0, 8)}... updated successfully!`);
+
+      // Recalculate impacts to show updated state
+      await handleCalculateImpact();
+
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update loan');
+    } finally {
+      setUpdating(null);
+    }
+  };
+
+  const getLTVColor = (ltv: number) => {
+    if (ltv >= 0.85) return 'text-red-600 font-bold';
+    if (ltv >= 0.80) return 'text-amber-600 font-bold';
+    if (ltv >= 0.70) return 'text-yellow-600';
+    return 'text-green-600';
+  };
+
   return (
     <div className="max-w-6xl mx-auto space-y-8 animate-fade-in">
       <div className="text-center space-y-2">
@@ -142,6 +253,142 @@ export default function AdminPage() {
           </CardContent>
         </Card>
       )}
+
+      <Card className="border-slate-200 shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-xl font-semibold text-slate-900">Price Oracle Simulator</CardTitle>
+          <CardDescription>
+            Simulate market price changes and update loan LTV ratios
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Current Prices Display */}
+          <div className="p-4 rounded-lg bg-slate-50 border border-slate-200">
+            <h3 className="text-sm font-semibold text-slate-700 mb-3">Current Asset Prices</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <p className="text-xs text-slate-500">cBTC</p>
+                <p className="text-lg font-bold text-slate-900 font-numeric">{formatCurrency(ASSET_CONFIG.cBTC.price)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">cETH</p>
+                <p className="text-lg font-bold text-slate-900 font-numeric">{formatCurrency(ASSET_CONFIG.cETH.price)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">USDC</p>
+                <p className="text-lg font-bold text-slate-900 font-numeric">{formatCurrency(ASSET_CONFIG.USDC.price)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">USDT</p>
+                <p className="text-lg font-bold text-slate-900 font-numeric">{formatCurrency(ASSET_CONFIG.USDT.price)}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Price Update Form */}
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="asset" className="text-sm font-medium text-slate-700">Select Asset</Label>
+              <select
+                id="asset"
+                value={selectedAsset}
+                onChange={(e) => setSelectedAsset(e.target.value as AssetType)}
+                className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="cBTC">cBTC - Canton Bitcoin</option>
+                <option value="cETH">cETH - Canton Ethereum</option>
+                <option value="USDC">USDC - USD Coin</option>
+                <option value="USDT">USDT - Tether</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="newPrice" className="text-sm font-medium text-slate-700">New Price ($)</Label>
+              <Input
+                id="newPrice"
+                type="number"
+                value={newPrice}
+                onChange={(e) => setNewPrice(e.target.value)}
+                placeholder="Enter new price"
+                min="0"
+                step="0.01"
+                className="font-numeric"
+              />
+            </div>
+          </div>
+
+          <div>
+            <Button
+              onClick={handleCalculateImpact}
+              disabled={calculating || !api}
+              className="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {calculating ? 'Calculating...' : 'Calculate Impact on Loans'}
+            </Button>
+            {parseFloat(newPrice) > 0 && ASSET_CONFIG[selectedAsset] && (
+              <p className="text-sm text-slate-600 mt-2">
+                Price change: {((parseFloat(newPrice) / ASSET_CONFIG[selectedAsset].price - 1) * 100).toFixed(1)}%
+              </p>
+            )}
+          </div>
+
+          {/* Impact Results Table */}
+          {impacts.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold text-slate-700 mb-3">Impact on Active Loans ({impacts.length} loans)</h3>
+              <div className="overflow-x-auto border border-slate-200 rounded-lg">
+                <table className="w-full">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase">Loan ID</th>
+                      <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase">Asset</th>
+                      <th className="text-right py-3 px-4 text-xs font-semibold text-slate-600 uppercase">Current LTV</th>
+                      <th className="text-right py-3 px-4 text-xs font-semibold text-slate-600 uppercase">New LTV</th>
+                      <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase">Status Change</th>
+                      <th className="text-center py-3 px-4 text-xs font-semibold text-slate-600 uppercase">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {impacts.map((impact) => (
+                      <tr key={impact.loanId} className="border-t border-slate-100 hover:bg-slate-50">
+                        <td className="py-3 px-4 text-sm font-mono text-slate-900">{impact.loanId.slice(0, 12)}...</td>
+                        <td className="py-3 px-4 text-sm text-slate-900">{impact.loanAsset}</td>
+                        <td className="py-3 px-4 text-sm text-right font-numeric">
+                          <span className={getLTVColor(impact.currentLTV)}>
+                            {(impact.currentLTV * 100).toFixed(1)}%
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-sm text-right font-numeric">
+                          <span className={getLTVColor(impact.newLTV)}>
+                            {(impact.newLTV * 100).toFixed(1)}%
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-sm text-slate-900">
+                          {impact.statusChange === 'No change' ? (
+                            <span className="text-slate-500">{impact.statusChange}</span>
+                          ) : (
+                            <span className="font-semibold text-amber-600">{impact.statusChange}</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <Button
+                            size="sm"
+                            onClick={() => handleUpdateLoan(impact.loanId, impact.newCollateralValue)}
+                            disabled={updating === impact.loanId || !api}
+                            className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1"
+                          >
+                            {updating === impact.loanId ? 'Updating...' : 'Update'}
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card className="border-slate-200 shadow-sm">
         <CardHeader>
