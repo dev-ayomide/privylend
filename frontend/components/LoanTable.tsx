@@ -39,6 +39,12 @@ export function LoanTable({ loans, onRepay }: LoanTableProps) {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
+      case 'Pending':
+        return (
+          <Badge className="bg-yellow-50 text-yellow-700 border-yellow-200">
+            Pending Approval
+          </Badge>
+        );
       case 'Repaid':
         return (
           <Badge className="bg-green-50 text-green-700 border-green-200">
@@ -126,7 +132,9 @@ export function LoanTable({ loans, onRepay }: LoanTableProps) {
                 </TableCell>
                 <TableCell>{getStatusBadge(loan.status)}</TableCell>
                 <TableCell>
-                  {(loan.status === 'Active' || loan.status === 'MarginCall') && (
+                  {loan.status === 'Pending' ? (
+                    <span className="text-sm text-slate-500">Awaiting approval</span>
+                  ) : (loan.status === 'Active' || loan.status === 'MarginCall') ? (
                     <Button
                       onClick={() => handleRepay(loan)}
                       disabled={repaying === loan.id}
@@ -134,7 +142,7 @@ export function LoanTable({ loans, onRepay }: LoanTableProps) {
                     >
                       {repaying === loan.id ? 'Processing...' : 'Repay'}
                     </Button>
-                  )}
+                  ) : null}
                 </TableCell>
               </TableRow>
             );

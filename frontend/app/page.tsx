@@ -11,18 +11,23 @@ import { CollateralAccount, Loan } from '@/lib/types';
 const USE_MOCK_DATA = process.env.NEXT_PUBLIC_USE_MOCK_DATA !== 'false';
 
 export default function Home() {
-  const { collateral, loans, loading, error } = usePrivyLend();
+  const { collateral, loans, loading, error, api, refreshData } = usePrivyLend();
   const [displayCollateral, setDisplayCollateral] = useState<CollateralAccount[]>([]);
   const [displayLoans, setDisplayLoans] = useState<Loan[]>([]);
+  const [withdrawSuccess, setWithdrawSuccess] = useState(false);
+  const [withdrawError, setWithdrawError] = useState<string | null>(null);
+  const [unlockSuccess, setUnlockSuccess] = useState(false);
+  const [unlockError, setUnlockError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (USE_MOCK_DATA || error || loading) {
+    if (USE_MOCK_DATA) {
       setDisplayCollateral(loadCollateral());
       setDisplayLoans(loadLoans());
-    } else {
+    } else if (!loading && !error) {
       setDisplayCollateral(collateral);
       setDisplayLoans(loans);
     }
+    // Don't update display data while loading or on error - keeps previous data visible
   }, [USE_MOCK_DATA, error, loading, collateral, loans]);
 
   const totalCollateral = displayCollateral.reduce((sum, acc) => sum + acc.effectiveValue, 0);
@@ -32,6 +37,44 @@ export default function Home() {
   const availableToWithdraw = displayCollateral
     .filter(acc => acc.status === 'Available')
     .reduce((sum, acc) => sum + acc.effectiveValue, 0);
+
+  const handleWithdraw = async (collateralId: string) => {
+    if (USE_MOCK_DATA || !api) {
+      setWithdrawSuccess(true);
+      setTimeout(() => setWithdrawSuccess(false), 3000);
+      return;
+    }
+
+    setWithdrawError(null);
+
+    try {
+      await api.withdrawCollateral(collateralId);
+      setWithdrawSuccess(true);
+      await refreshData();
+      setTimeout(() => setWithdrawSuccess(false), 3000);
+    } catch (err) {
+      setWithdrawError(err instanceof Error ? err.message : 'Failed to withdraw collateral');
+    }
+  };
+
+  const handleUnlock = async (collateralId: string) => {
+    if (USE_MOCK_DATA || !api) {
+      setUnlockSuccess(true);
+      setTimeout(() => setUnlockSuccess(false), 3000);
+      return;
+    }
+
+    setUnlockError(null);
+
+    try {
+      await api.unlockCollateral(collateralId);
+      setUnlockSuccess(true);
+      await refreshData();
+      setTimeout(() => setUnlockSuccess(false), 3000);
+    } catch (err) {
+      setUnlockError(err instanceof Error ? err.message : 'Failed to unlock collateral');
+    }
+  };
 
   return (
     <div className="space-y-8 animate-fade-in">
@@ -51,6 +94,46 @@ export default function Home() {
         {loading && !USE_MOCK_DATA && (
           <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg max-w-2xl mx-auto">
             <p className="text-sm text-blue-800">Loading data from Canton Network...</p>
+          </div>
+        )}
+        {withdrawError && (
+          <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg max-w-2xl mx-auto">
+            <p className="text-sm text-red-800 flex items-center justify-center gap-2">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {withdrawError}
+            </p>
+          </div>
+        )}
+        {withdrawSuccess && (
+          <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg max-w-2xl mx-auto">
+            <p className="text-sm text-green-800 flex items-center justify-center gap-2">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Collateral withdrawn successfully!
+            </p>
+          </div>
+        )}
+        {unlockSuccess && (
+          <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg max-w-2xl mx-auto">
+            <p className="text-sm text-green-800 flex items-center justify-center gap-2">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Collateral unlocked successfully!
+            </p>
+          </div>
+        )}
+        {unlockError && (
+          <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg max-w-2xl mx-auto">
+            <p className="text-sm text-red-800 flex items-center justify-center gap-2">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {unlockError}
+            </p>
           </div>
         )}
       </div>
@@ -140,7 +223,12 @@ export default function Home() {
             </div>
           ) : (
             displayCollateral.map((collateral) => (
-              <CollateralCard key={collateral.id} collateral={collateral} />
+              <CollateralCard
+                key={collateral.id}
+                collateral={collateral}
+                onWithdraw={handleWithdraw}
+                onUnlock={handleUnlock}
+              />
             ))
           )}
         </div>

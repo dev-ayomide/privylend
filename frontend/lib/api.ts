@@ -32,6 +32,34 @@ export class PrivyLendAPI {
     }
   }
 
+  // Fetch pending loan requests for pool (admin view)
+  async getPendingLoanRequests(): Promise<Loan[]> {
+    try {
+      const loanRequests = await CantonClient.getLoanRequestsForPool(this.party, this.token);
+
+      // Transform LoanRequest contracts (these are PENDING approval)
+      return loanRequests.map((c: any) => ({
+        id: c.contractId,
+        collateralId: c.payload.collateralId,
+        loanAsset: c.payload.requestedAsset as AssetType,
+        principal: parseFloat(c.payload.requestedAmount),
+        outstandingBalance: parseFloat(c.payload.requestedAmount),
+        collateralValue: parseFloat(c.payload.collateralValue),
+        currentLTV: parseFloat(c.payload.requestedAmount) / parseFloat(c.payload.collateralValue),
+        interestRate: parseFloat(c.payload.interestRate),
+        startDate: new Date().toISOString().split('T')[0],
+        dueDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+        status: 'Pending' as const,
+        totalOwed: parseFloat(c.payload.requestedAmount) * 1.08,
+        marginCallThreshold: 0.80,
+        liquidationThreshold: 0.85,
+      }));
+    } catch (error) {
+      console.error('Error fetching pending loan requests:', error);
+      return [];
+    }
+  }
+
   // Fetch active loans (both LoanRequests and ActiveLoans from Canton)
   async getActiveLoans(): Promise<Loan[]> {
     try {
@@ -40,7 +68,7 @@ export class PrivyLendAPI {
         CantonClient.getActiveLoansFromCanton(this.party),
       ]);
 
-      // Transform LoanRequest contracts
+      // Transform LoanRequest contracts (these are PENDING approval)
       const requests: Loan[] = loanRequests.map((c: any) => ({
         id: c.contractId,
         collateralId: c.payload.collateralId,
@@ -52,7 +80,7 @@ export class PrivyLendAPI {
         interestRate: parseFloat(c.payload.interestRate),
         startDate: new Date().toISOString().split('T')[0],
         dueDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
-        status: 'Active' as const,
+        status: 'Pending' as const,
         totalOwed: parseFloat(c.payload.requestedAmount) * 1.08,
         marginCallThreshold: 0.80,
         liquidationThreshold: 0.85,
@@ -141,13 +169,96 @@ export class PrivyLendAPI {
 
   // Get available lending pools
   async getLendingPools(): Promise<Array<{ id: string; owner: Party; name: string; availableFunds: number }>> {
-    // TODO: Implement Canton query for Pool contracts
-    return [];
+    try {
+      const contracts = await CantonClient.getLendingPools();
+      // Transform Canton Pool contracts to our interface
+      return contracts.map((c: any) => ({
+        id: c.contractId,
+        owner: c.payload.poolOperator,
+        name: 'PrivyLend Pool',
+        availableFunds: parseFloat(c.payload.availableUSDC) + parseFloat(c.payload.availableCBTC),
+      }));
+    } catch (error) {
+      console.error('Error fetching lending pools:', error);
+      return [];
+    }
   }
 
   // Withdraw collateral
   async withdrawCollateral(collateralId: string): Promise<void> {
-    // TODO: Implement Canton exercise for UnlockCollateral
-    return;
+    try {
+      await CantonClient.withdrawCollateral(collateralId);
+      console.log('Collateral withdrawn successfully');
+    } catch (error) {
+      console.error('Error withdrawing collateral:', error);
+      throw error;
+    }
+  }
+
+  // Unlock collateral (after loan is repaid)
+  async unlockCollateral(collateralId: string): Promise<void> {
+    try {
+      await CantonClient.unlockCollateral(collateralId);
+      console.log('Collateral unlocked successfully');
+    } catch (error) {
+      console.error('Error unlocking collateral:', error);
+      throw error;
+    }
+  }
+
+  // Lock collateral (when loan is approved)
+  async lockCollateral(collateralId: string, loanId: string): Promise<void> {
+    try {
+      await CantonClient.lockCollateral(collateralId, loanId);
+      console.log('Collateral locked successfully');
+    } catch (error) {
+      console.error('Error locking collateral:', error);
+      throw error;
+    }
+  }
+
+  // Update collateral price
+  async updateCollateralPrice(collateralId: string, newPrice: number): Promise<void> {
+    try {
+      await CantonClient.updateCollateralPrice(collateralId, newPrice);
+      console.log('Collateral price updated successfully');
+    } catch (error) {
+      console.error('Error updating collateral price:', error);
+      throw error;
+    }
+  }
+
+  // Update loan collateral value (for LTV monitoring)
+  async updateLoanCollateralValue(loanId: string, newCollateralValue: number): Promise<void> {
+    try {
+      await CantonClient.updateLoanCollateralValue(loanId, newCollateralValue);
+      console.log('Loan collateral value updated successfully');
+    } catch (error) {
+      console.error('Error updating loan collateral value:', error);
+      throw error;
+    }
+  }
+
+  // Trigger liquidation
+  async triggerLiquidation(loanId: string): Promise<void> {
+    try {
+      await CantonClient.triggerLiquidation(loanId);
+      console.log('Liquidation triggered successfully');
+    } catch (error) {
+      console.error('Error triggering liquidation:', error);
+      throw error;
+    }
+  }
+
+  // Approve loan request (pool operator only)
+  async approveLoan(loanRequestId: string): Promise<string> {
+    try {
+      const result = await CantonClient.approveLoan(loanRequestId, this.token);
+      console.log('Loan approved successfully');
+      return result.contractId || 'approved';
+    } catch (error) {
+      console.error('Error approving loan:', error);
+      throw error;
+    }
   }
 }

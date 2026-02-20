@@ -9,17 +9,22 @@ export async function POST(request: NextRequest) {
   const endpoint = searchParams.get('endpoint') || '/v1/create';
   const targetUrl = `${CANTON_URL}${endpoint}`;
 
+  // Get token from request header or fall back to env
+  const authHeader = request.headers.get('Authorization');
+  const token = authHeader?.replace('Bearer ', '') || CANTON_TOKEN;
+
   try {
     const body = await request.json();
 
     console.log(`[Canton Proxy] POST ${targetUrl}`);
     console.log(`[Canton Proxy] Body:`, JSON.stringify(body).substring(0, 200));
+    console.log(`[Canton Proxy] Using token:`, token.substring(0, 20) + '...');
 
     const response = await fetch(targetUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${CANTON_TOKEN}`,
+        'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify(body),
     });

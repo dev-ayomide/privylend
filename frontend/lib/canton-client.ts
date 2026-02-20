@@ -75,7 +75,7 @@ export async function depositCollateral(
   }
 }
 
-// Fetch loan requests for user
+// Fetch loan requests for user (as borrower)
 export async function getLoanRequests(userId: string) {
   try {
     const result = await fetch(`${process.env.NEXT_PUBLIC_LEDGER_URL}?endpoint=/v1/query`, {
@@ -97,6 +97,37 @@ export async function getLoanRequests(userId: string) {
     return data.result || [];
   } catch (error) {
     console.error('Error querying loan requests:', error);
+    return [];
+  }
+}
+
+// Fetch loan requests for pool (as lendingPool/observer)
+export async function getLoanRequestsForPool(poolParty: string, token?: string) {
+  try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const result = await fetch(`${process.env.NEXT_PUBLIC_LEDGER_URL}?endpoint=/v1/query`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        templateIds: [`${PACKAGE_ID}:Loan:LoanRequest`],
+        query: { lendingPool: poolParty }
+      }),
+    });
+
+    if (!result.ok) {
+      throw new Error(`Query failed: ${result.status}`);
+    }
+
+    const data = await result.json();
+    return data.result || [];
+  } catch (error) {
+    console.error('Error querying loan requests for pool:', error);
     return [];
   }
 }
@@ -197,6 +228,239 @@ export async function makePayment(
     return await result.json();
   } catch (error) {
     console.error('Error making payment:', error);
+    throw error;
+  }
+}
+
+// Fetch lending pools
+export async function getLendingPools() {
+  try {
+    const result = await fetch(`${process.env.NEXT_PUBLIC_LEDGER_URL}?endpoint=/v1/query`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        templateIds: [`${PACKAGE_ID}:LendingPool:Pool`],
+        query: {}
+      }),
+    });
+
+    if (!result.ok) {
+      throw new Error(`Query failed: ${result.status}`);
+    }
+
+    const data = await result.json();
+    return data.result || [];
+  } catch (error) {
+    console.error('Error querying lending pools:', error);
+    return [];
+  }
+}
+
+// Withdraw collateral (archives the contract - only for unlocked collateral)
+export async function withdrawCollateral(collateralId: string) {
+  try {
+    const result = await fetch(`${process.env.NEXT_PUBLIC_LEDGER_URL}?endpoint=/v1/exercise`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        templateId: `${PACKAGE_ID}:Collateral:CollateralAccount`,
+        contractId: collateralId,
+        choice: 'Withdraw',
+        argument: {}
+      }),
+    });
+
+    if (!result.ok) {
+      const error = await result.json();
+      throw new Error(error.errors ? error.errors.join(', ') : 'Exercise failed');
+    }
+
+    return await result.json();
+  } catch (error) {
+    console.error('Error withdrawing collateral:', error);
+    throw error;
+  }
+}
+
+// Unlock collateral (converts locked collateral back to available)
+export async function unlockCollateral(collateralId: string) {
+  try {
+    const result = await fetch(`${process.env.NEXT_PUBLIC_LEDGER_URL}?endpoint=/v1/exercise`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        templateId: `${PACKAGE_ID}:Collateral:CollateralAccount`,
+        contractId: collateralId,
+        choice: 'UnlockCollateral',
+        argument: {}
+      }),
+    });
+
+    if (!result.ok) {
+      const error = await result.json();
+      throw new Error(error.errors ? error.errors.join(', ') : 'Exercise failed');
+    }
+
+    return await result.json();
+  } catch (error) {
+    console.error('Error unlocking collateral:', error);
+    throw error;
+  }
+}
+
+// Lock collateral (when loan is approved)
+export async function lockCollateral(collateralId: string, loanId: string) {
+  try {
+    const result = await fetch(`${process.env.NEXT_PUBLIC_LEDGER_URL}?endpoint=/v1/exercise`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        templateId: `${PACKAGE_ID}:Collateral:CollateralAccount`,
+        contractId: collateralId,
+        choice: 'LockCollateral',
+        argument: {
+          loanId: loanId
+        }
+      }),
+    });
+
+    if (!result.ok) {
+      const error = await result.json();
+      throw new Error(error.errors ? error.errors.join(', ') : 'Exercise failed');
+    }
+
+    return await result.json();
+  } catch (error) {
+    console.error('Error locking collateral:', error);
+    throw error;
+  }
+}
+
+// Update collateral price (for LTV recalculation)
+export async function updateCollateralPrice(collateralId: string, newPrice: number) {
+  try {
+    const result = await fetch(`${process.env.NEXT_PUBLIC_LEDGER_URL}?endpoint=/v1/exercise`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        templateId: `${PACKAGE_ID}:Collateral:CollateralAccount`,
+        contractId: collateralId,
+        choice: 'UpdatePrice',
+        argument: {
+          newPrice: newPrice.toString()
+        }
+      }),
+    });
+
+    if (!result.ok) {
+      const error = await result.json();
+      throw new Error(error.errors ? error.errors.join(', ') : 'Exercise failed');
+    }
+
+    return await result.json();
+  } catch (error) {
+    console.error('Error updating collateral price:', error);
+    throw error;
+  }
+}
+
+// Update collateral value on loan (for LTV monitoring)
+export async function updateLoanCollateralValue(loanId: string, newCollateralValue: number) {
+  try {
+    const result = await fetch(`${process.env.NEXT_PUBLIC_LEDGER_URL}?endpoint=/v1/exercise`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        templateId: `${PACKAGE_ID}:Loan:ActiveLoan`,
+        contractId: loanId,
+        choice: 'UpdateCollateralValue',
+        argument: {
+          newCollateralValue: newCollateralValue.toString()
+        }
+      }),
+    });
+
+    if (!result.ok) {
+      const error = await result.json();
+      throw new Error(error.errors ? error.errors.join(', ') : 'Exercise failed');
+    }
+
+    return await result.json();
+  } catch (error) {
+    console.error('Error updating loan collateral value:', error);
+    throw error;
+  }
+}
+
+// Trigger liquidation
+export async function triggerLiquidation(loanId: string) {
+  try {
+    const result = await fetch(`${process.env.NEXT_PUBLIC_LEDGER_URL}?endpoint=/v1/exercise`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        templateId: `${PACKAGE_ID}:Loan:ActiveLoan`,
+        contractId: loanId,
+        choice: 'TriggerLiquidation',
+        argument: {}
+      }),
+    });
+
+    if (!result.ok) {
+      const error = await result.json();
+      throw new Error(error.errors ? error.errors.join(', ') : 'Exercise failed');
+    }
+
+    return await result.json();
+  } catch (error) {
+    console.error('Error triggering liquidation:', error);
+    throw error;
+  }
+}
+
+// Approve loan request (pool operator only)
+export async function approveLoan(loanRequestId: string, token?: string) {
+  try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const result = await fetch(`${process.env.NEXT_PUBLIC_LEDGER_URL}?endpoint=/v1/exercise`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        templateId: `${PACKAGE_ID}:Loan:LoanRequest`,
+        contractId: loanRequestId,
+        choice: 'ApproveLoan',
+        argument: {}
+      }),
+    });
+
+    if (!result.ok) {
+      const error = await result.json();
+      throw new Error(error.errors ? error.errors.join(', ') : 'Exercise failed');
+    }
+
+    return await result.json();
+  } catch (error) {
+    console.error('Error approving loan:', error);
     throw error;
   }
 }

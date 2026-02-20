@@ -58,6 +58,27 @@ export function usePrivyLend() {
         setLoading(false);
         console.error('Error initializing PrivyLend:', err);
       });
+
+    // Set up polling for real-time updates (every 10 seconds)
+    const pollInterval = setInterval(() => {
+      Promise.all([
+        privyLendAPI.getCollateralAccounts(),
+        privyLendAPI.getActiveLoans(),
+      ])
+        .then(([collateralData, loansData]) => {
+          setCollateral(collateralData);
+          setLoans(loansData);
+        })
+        .catch((err) => {
+          console.error('Error polling data:', err);
+          // Don't set error state on polling failures to avoid disrupting UI
+        });
+    }, 10000);
+
+    // Cleanup on unmount
+    return () => {
+      clearInterval(pollInterval);
+    };
   }, []);
 
   return {
