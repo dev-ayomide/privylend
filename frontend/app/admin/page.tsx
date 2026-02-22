@@ -77,7 +77,7 @@ export default function AdminPage() {
       // Transform to PendingLoan interface
       const pending = loans.map(loan => ({
         id: loan.id,
-        borrower: 'Borrower', // We'd need to add this to the loan data
+        borrower: loan.borrower ? loan.borrower.split('::')[0] : 'Unknown',
         requestedAsset: loan.loanAsset,
         requestedAmount: loan.principal,
         collateralValue: loan.collateralValue,
@@ -178,6 +178,27 @@ export default function AdminPage() {
     } catch (err) {
       console.error('❌ Loan approval failed:', err);
       setError(err instanceof Error ? err.message : 'Failed to approve loan');
+    }
+  };
+
+  const handleRejectLoan = async (loanId: string) => {
+    if (USE_MOCK_DATA || !api) {
+      setSuccess('Loan rejected (demo mode)');
+      setTimeout(() => setSuccess(null), 3000);
+      return;
+    }
+
+    setError(null);
+    setSuccess(null);
+
+    try {
+      await api.rejectLoan(loanId);
+      setSuccess('Loan rejected. Borrower can cancel to unlock their collateral.');
+      await fetchPendingLoans();
+      await fetchPoolStats();
+      setTimeout(() => setSuccess(null), 5000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to reject loan');
     }
   };
 
@@ -502,7 +523,6 @@ export default function AdminPage() {
                         </td>
                         <td className="py-3 px-4 text-center">
                           <Button
-                            size="sm"
                             onClick={() => handleUpdateLoan(impact.loanId, impact.newCollateralValue)}
                             disabled={updating === impact.loanId || !api}
                             className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1"
@@ -575,12 +595,21 @@ export default function AdminPage() {
                         {(loan.interestRate * 100).toFixed(1)}%
                       </td>
                       <td className="py-4 px-4 text-center">
-                        <Button
-                          onClick={() => handleApproveLoan(loan.id)}
-                          className="bg-green-600 hover:bg-green-700 text-white text-sm px-4 py-1.5"
-                        >
-                          Approve
-                        </Button>
+                        <div className="flex gap-2 justify-center">
+                          <Button
+                            onClick={() => handleApproveLoan(loan.id)}
+                            className="bg-green-600 hover:bg-green-700 text-white text-sm px-4 py-1.5"
+                          >
+                            Approve
+                          </Button>
+                          <Button
+                            onClick={() => handleRejectLoan(loan.id)}
+                            variant="outline"
+                            className="border-red-300 text-red-600 hover:bg-red-50 text-sm px-4 py-1.5"
+                          >
+                            Reject
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}

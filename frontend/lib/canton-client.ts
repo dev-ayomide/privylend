@@ -4,7 +4,7 @@ import { AssetType, ASSET_CONFIG } from './types';
 // No Ledger instance needed
 // Canton JSON API requires fully qualified templateId: "packageId:module:entity"
 
-const PACKAGE_ID = 'ff0eb054abe3a9a406093c6d594676766d7bf42a9bdf81d14f127e31f133dcaa';
+const PACKAGE_ID = '63c908e1c522c6e323edaadb40c7a002edd067b5b2441476a1fc71671ce2deae';
 
 // Fetch user collateral
 export async function getCollateral(userId: string) {
@@ -439,6 +439,63 @@ export async function triggerLiquidation(loanId: string) {
     return await result.json();
   } catch (error) {
     console.error('Error triggering liquidation:', error);
+    throw error;
+  }
+}
+
+// Reject loan request (pool operator only)
+export async function rejectLoan(loanRequestId: string, token?: string): Promise<void> {
+  try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const result = await fetch(`${process.env.NEXT_PUBLIC_LEDGER_URL}?endpoint=/v1/exercise`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        templateId: `${PACKAGE_ID}:Loan:LoanRequest`,
+        contractId: loanRequestId,
+        choice: 'RejectLoan',
+        argument: {}
+      }),
+    });
+
+    if (!result.ok) {
+      const error = await result.json();
+      throw new Error(error.errors ? error.errors.join(', ') : 'Exercise failed');
+    }
+  } catch (error) {
+    console.error('Error rejecting loan:', error);
+    throw error;
+  }
+}
+
+// Cancel loan request (borrower only - unlocks collateral)
+export async function cancelLoanRequest(loanRequestId: string): Promise<void> {
+  try {
+    const result = await fetch(`${process.env.NEXT_PUBLIC_LEDGER_URL}?endpoint=/v1/exercise`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        templateId: `${PACKAGE_ID}:Loan:LoanRequest`,
+        contractId: loanRequestId,
+        choice: 'CancelRequest',
+        argument: {}
+      }),
+    });
+
+    if (!result.ok) {
+      const error = await result.json();
+      throw new Error(error.errors ? error.errors.join(', ') : 'Exercise failed');
+    }
+  } catch (error) {
+    console.error('Error cancelling loan request:', error);
     throw error;
   }
 }

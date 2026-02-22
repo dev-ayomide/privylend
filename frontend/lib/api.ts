@@ -37,23 +37,26 @@ export class PrivyLendAPI {
     try {
       const loanRequests = await CantonClient.getLoanRequestsForPool(this.party, this.token);
 
-      // Transform LoanRequest contracts (these are PENDING approval)
-      return loanRequests.map((c: any) => ({
-        id: c.contractId,
-        collateralId: c.payload.collateralId,
-        loanAsset: c.payload.requestedAsset as AssetType,
-        principal: parseFloat(c.payload.requestedAmount),
-        outstandingBalance: parseFloat(c.payload.requestedAmount),
-        collateralValue: parseFloat(c.payload.collateralValue),
-        currentLTV: parseFloat(c.payload.requestedAmount) / parseFloat(c.payload.collateralValue),
-        interestRate: parseFloat(c.payload.interestRate),
-        startDate: new Date().toISOString().split('T')[0],
-        dueDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
-        status: 'Pending' as const,
-        totalOwed: parseFloat(c.payload.requestedAmount) * 1.08,
-        marginCallThreshold: 0.80,
-        liquidationThreshold: 0.85,
-      }));
+      // Transform LoanRequest contracts - filter to only Pending (exclude Rejected)
+      return loanRequests
+        .filter((c: any) => c.payload.status === 'Pending')
+        .map((c: any) => ({
+          id: c.contractId,
+          borrower: c.payload.borrower,
+          collateralId: c.payload.collateralId,
+          loanAsset: c.payload.requestedAsset as AssetType,
+          principal: parseFloat(c.payload.requestedAmount),
+          outstandingBalance: parseFloat(c.payload.requestedAmount),
+          collateralValue: parseFloat(c.payload.collateralValue),
+          currentLTV: parseFloat(c.payload.requestedAmount) / parseFloat(c.payload.collateralValue),
+          interestRate: parseFloat(c.payload.interestRate),
+          startDate: new Date().toISOString().split('T')[0],
+          dueDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+          status: 'Pending' as const,
+          totalOwed: parseFloat(c.payload.requestedAmount) * 1.08,
+          marginCallThreshold: 0.80,
+          liquidationThreshold: 0.85,
+        }));
     } catch (error) {
       console.error('Error fetching pending loan requests:', error);
       return [];
@@ -68,7 +71,7 @@ export class PrivyLendAPI {
         CantonClient.getActiveLoansFromCanton(this.party),
       ]);
 
-      // Transform LoanRequest contracts (these are PENDING approval)
+      // Transform LoanRequest contracts (Pending or Rejected)
       const requests: Loan[] = loanRequests.map((c: any) => ({
         id: c.contractId,
         collateralId: c.payload.collateralId,
@@ -80,7 +83,7 @@ export class PrivyLendAPI {
         interestRate: parseFloat(c.payload.interestRate),
         startDate: new Date().toISOString().split('T')[0],
         dueDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
-        status: 'Pending' as const,
+        status: (c.payload.status === 'Rejected' ? 'Rejected' : 'Pending') as Loan['status'],
         totalOwed: parseFloat(c.payload.requestedAmount) * 1.08,
         marginCallThreshold: 0.80,
         liquidationThreshold: 0.85,
@@ -249,6 +252,28 @@ export class PrivyLendAPI {
       console.log('Liquidation triggered successfully');
     } catch (error) {
       console.error('Error triggering liquidation:', error);
+      throw error;
+    }
+  }
+
+  // Reject loan request (pool operator only)
+  async rejectLoan(loanRequestId: string): Promise<void> {
+    try {
+      await CantonClient.rejectLoan(loanRequestId, this.token);
+      console.log('Loan rejected successfully');
+    } catch (error) {
+      console.error('Error rejecting loan:', error);
+      throw error;
+    }
+  }
+
+  // Cancel loan request (borrower only - unlocks collateral)
+  async cancelLoanRequest(loanRequestId: string): Promise<void> {
+    try {
+      await CantonClient.cancelLoanRequest(loanRequestId);
+      console.log('Loan request cancelled, collateral unlocked');
+    } catch (error) {
+      console.error('Error cancelling loan request:', error);
       throw error;
     }
   }

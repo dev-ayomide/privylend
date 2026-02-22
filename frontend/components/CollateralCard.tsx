@@ -95,6 +95,17 @@ export function CollateralCard({ collateral, onWithdraw, onUnlock }: CollateralC
           <p className="text-xs text-slate-500">
             Max borrowable: <span className="text-blue-600 font-medium font-numeric">{formatCurrency(collateral.effectiveValue * 0.70)}</span>
           </p>
+          {collateral.status === 'Available' && onWithdraw && (
+            <div className="mt-3">
+              <Button
+                onClick={() => onWithdraw(collateral.id)}
+                variant="outline"
+                className="w-full text-sm border-slate-300 text-slate-700 hover:bg-slate-50"
+              >
+                Withdraw
+              </Button>
+            </div>
+          )}
           {collateral.status === 'Locked' && (
             <div className="mt-3">
               <div className="p-3 rounded-lg bg-amber-50 border border-amber-200">

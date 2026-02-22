@@ -59,6 +59,21 @@ export default function LoansPage() {
     }
   };
 
+  const handleCancelRequest = async (loanId: string) => {
+    if (USE_MOCK_DATA || !api) return;
+
+    setRepaymentError(null);
+
+    try {
+      await api.cancelLoanRequest(loanId);
+      setRepaymentSuccess(true);
+      await refreshData();
+      setTimeout(() => setRepaymentSuccess(false), 3000);
+    } catch (err) {
+      setRepaymentError(err instanceof Error ? err.message : 'Failed to cancel loan request');
+    }
+  };
+
   const activeLoans = displayLoans.filter(l => l.status === 'Active' || l.status === 'MarginCall');
   const totalOwed = activeLoans.reduce((sum, loan) => sum + loan.outstandingBalance, 0);
   const avgLTV = activeLoans.length > 0
@@ -225,7 +240,7 @@ export default function LoansPage() {
               <p className="text-sm text-slate-500 mt-2">Request a loan to get started.</p>
             </div>
           ) : (
-            <LoanTable loans={displayLoans} onRepay={handleRepay} />
+            <LoanTable loans={displayLoans} onRepay={handleRepay} onCancel={handleCancelRequest} />
           )}
         </CardContent>
       </Card>

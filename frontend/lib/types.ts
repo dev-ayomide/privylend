@@ -2,7 +2,7 @@ export type AssetType = 'cBTC' | 'cETH' | 'USDC' | 'USDT';
 
 export type CollateralStatus = 'Available' | 'Locked';
 
-export type LoanStatus = 'Pending' | 'Active' | 'MarginCall' | 'Liquidating' | 'Repaid' | 'Due Soon';
+export type LoanStatus = 'Pending' | 'Active' | 'MarginCall' | 'Liquidating' | 'Liquidated' | 'Repaid' | 'Due Soon' | 'Rejected';
 
 export interface CollateralAccount {
   id: string;
@@ -17,6 +17,7 @@ export interface CollateralAccount {
 
 export interface Loan {
   id: string;
+  borrower?: string;          // Party identifier (for admin view)
   collateralId: string;
   loanAsset: AssetType;
   principal: number;

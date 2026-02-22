@@ -17,10 +17,12 @@ import { formatCurrency, formatDate } from '@/lib/utils';
 interface LoanTableProps {
   loans: Loan[];
   onRepay: (loanId: string, amount: number) => void;
+  onCancel?: (loanId: string) => void;
 }
 
-export function LoanTable({ loans, onRepay }: LoanTableProps) {
+export function LoanTable({ loans, onRepay, onCancel }: LoanTableProps) {
   const [repaying, setRepaying] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState<string | null>(null);
 
   const getEstimatedTotal = (loan: Loan): number => {
     // Estimate accrued interest based on time elapsed
@@ -57,6 +59,12 @@ export function LoanTable({ loans, onRepay }: LoanTableProps) {
             Pending Approval
           </Badge>
         );
+      case 'Rejected':
+        return (
+          <Badge variant="danger" className="bg-red-50 text-red-700 border-red-200">
+            Rejected
+          </Badge>
+        );
       case 'Repaid':
         return (
           <Badge className="bg-green-50 text-green-700 border-green-200">
@@ -73,6 +81,12 @@ export function LoanTable({ loans, onRepay }: LoanTableProps) {
         return (
           <Badge variant="danger" className="bg-red-50 text-red-700 border-red-200">
             Liquidating
+          </Badge>
+        );
+      case 'Liquidated':
+        return (
+          <Badge variant="danger" className="bg-slate-100 text-slate-700 border-slate-300">
+            Liquidated
           </Badge>
         );
       case 'Due Soon':
@@ -172,7 +186,41 @@ export function LoanTable({ loans, onRepay }: LoanTableProps) {
                 <TableCell>{getStatusBadge(loan.status)}</TableCell>
                 <TableCell>
                   {loan.status === 'Pending' ? (
-                    <span className="text-sm text-slate-500">Awaiting approval</span>
+                    onCancel ? (
+                      <Button
+                        onClick={() => {
+                          setCancelling(loan.id);
+                          onCancel(loan.id);
+                          setTimeout(() => setCancelling(null), 2000);
+                        }}
+                        disabled={cancelling === loan.id}
+                        variant="outline"
+                        className="border-red-300 text-red-600 hover:bg-red-50 text-sm px-3 py-1"
+                      >
+                        {cancelling === loan.id ? 'Cancelling...' : 'Cancel'}
+                      </Button>
+                    ) : (
+                      <span className="text-sm text-slate-500">Awaiting approval</span>
+                    )
+                  ) : loan.status === 'Rejected' ? (
+                    onCancel ? (
+                      <Button
+                        onClick={() => {
+                          setCancelling(loan.id);
+                          onCancel(loan.id);
+                          setTimeout(() => setCancelling(null), 2000);
+                        }}
+                        disabled={cancelling === loan.id}
+                        variant="outline"
+                        className="border-amber-300 text-amber-700 hover:bg-amber-50 text-sm px-3 py-1"
+                      >
+                        {cancelling === loan.id ? 'Unlocking...' : 'Cancel & Unlock'}
+                      </Button>
+                    ) : (
+                      <span className="text-sm text-red-500 font-medium">Rejected - Cancel to unlock collateral</span>
+                    )
+                  ) : loan.status === 'Liquidated' ? (
+                    <span className="text-sm text-slate-500 font-medium">Liquidated</span>
                   ) : loan.status === 'Repaid' ? (
                     <span className="text-sm text-green-600 font-medium flex items-center gap-1">
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

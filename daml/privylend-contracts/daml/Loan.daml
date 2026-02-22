@@ -23,12 +23,11 @@ template LoanRequest
     let loanToValue = requestedAmount / collateralValue
     ensure loanToValue <= 0.70
 
-    choice RejectLoan : ()
+    choice RejectLoan : ContractId LoanRequest
       controller lendingPool
       do
-        -- Reject the loan request (archives it)
-        -- Borrower must cancel to unlock their collateral
-        return ()
+        -- Reject but keep contract alive so borrower can CancelRequest to unlock collateral
+        create this with status = "Rejected"
 
     choice CancelRequest : ContractId CollateralAccount
       controller borrower
