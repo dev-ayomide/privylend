@@ -37,19 +37,25 @@ testCompleteFlow = script do
 
   debug "    Effective value: $48,000 (after 20% haircut)"
 
-  debug "=== 3. Alice Requests $30k USDC Loan ==="
+  debug "=== 3. Alice Locks Collateral and Requests $30k USDC Loan ==="
+  -- Step 3a: Lock collateral first (borrower-controlled)
+  lockedCollateral <- submit alice do
+    exerciseCmd aliceCollateral LockCollateral with loanId = "COL-001"
+
+  -- Step 3b: Create loan request with locked collateral's contract ID
   loanRequest <- submit alice do
     createCmd LoanRequest with
       borrower = alice
       lendingPool = pool
       collateralId = "COL-001"
+      collateralCid = lockedCollateral  -- Pass LOCKED collateral contract ID
       requestedAsset = "USDC"
       requestedAmount = 30000.0
       collateralValue = 48000.0
       interestRate = 0.08
       status = "Pending"
 
-  debug "    LTV: 62.5% - Safe"
+  debug "    LTV: 62.5% - Safe, Collateral Locked"
 
   debug "=== 4. Pool Approves Loan ==="
   activeLoan <- submit pool do

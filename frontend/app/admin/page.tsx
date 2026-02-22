@@ -45,6 +45,13 @@ export default function AdminPage() {
   const [updating, setUpdating] = useState<string | null>(null);
   const [calculating, setCalculating] = useState(false);
 
+  // Pool stats state
+  const [totalCollateralValue, setTotalCollateralValue] = useState(0);
+  const [totalLoansOutstanding, setTotalLoansOutstanding] = useState(0);
+  const [activeLoansCount, setActiveLoansCount] = useState(0);
+  const [avgPoolLTV, setAvgPoolLTV] = useState(0);
+  const [atRiskLoansCount, setAtRiskLoansCount] = useState(0);
+
   // Initialize API with Pool Party credentials
   useEffect(() => {
     const poolParty = process.env.NEXT_PUBLIC_POOL_PARTY;
@@ -88,6 +95,37 @@ export default function AdminPage() {
     }
   };
 
+  const fetchPoolStats = async () => {
+    if (!api) return;
+
+    try {
+      // Get all collateral and loans to calculate pool stats
+      const [allCollateral, allLoans] = await Promise.all([
+        api.getAllCollateralAccounts(),
+        api.getAllActiveLoans()
+      ]);
+
+      // Calculate total collateral value
+      const totalCollateral = allCollateral.reduce((sum, c) => sum + c.effectiveValue, 0);
+      setTotalCollateralValue(totalCollateral);
+
+      // Calculate loans statistics
+      const activeLoans = allLoans.filter(l => l.status === 'Active' || l.status === 'MarginCall' || l.status === 'Liquidating');
+      const totalOutstanding = activeLoans.reduce((sum, l) => sum + l.outstandingBalance, 0);
+      const atRisk = allLoans.filter(l => l.status === 'MarginCall' || l.status === 'Liquidating').length;
+      const avgLTV = activeLoans.length > 0
+        ? activeLoans.reduce((sum, l) => sum + l.currentLTV, 0) / activeLoans.length
+        : 0;
+
+      setTotalLoansOutstanding(totalOutstanding);
+      setActiveLoansCount(activeLoans.length);
+      setAvgPoolLTV(avgLTV);
+      setAtRiskLoansCount(atRisk);
+    } catch (err) {
+      console.error('Error fetching pool stats:', err);
+    }
+  };
+
   useEffect(() => {
     if (USE_MOCK_DATA) {
       setLoading(false);
@@ -101,6 +139,7 @@ export default function AdminPage() {
 
     // Initial fetch
     fetchPendingLoans();
+    fetchPoolStats();
 
     // Refresh every 10 seconds
     const interval = setInterval(fetchPendingLoans, 10000);
@@ -118,11 +157,26 @@ export default function AdminPage() {
     setSuccess(null);
 
     try {
-      await api.approveLoan(loanId);
-      setSuccess('Loan approved successfully!');
+      // Find the loan to get collateralId
+      const loan = pendingLoans.find(l => l.id === loanId);
+      if (!loan) {
+        setError('Loan not found');
+        return;
+      }
+
+      console.log('Approving loan:', loanId);
+      console.log('Collateral ID:', loan.collateralId);
+
+      // Approve the loan - collateral was already locked by borrower before requesting
+      const activeLoanId = await api.approveLoan(loanId);
+      console.log('Loan approved! Active Loan ID:', activeLoanId);
+
+      setSuccess('Loan approved successfully! Collateral is secured.');
       await fetchPendingLoans();
+      await fetchPoolStats();
       setTimeout(() => setSuccess(null), 5000);
     } catch (err) {
+      console.error('❌ Loan approval failed:', err);
       setError(err instanceof Error ? err.message : 'Failed to approve loan');
     }
   };
@@ -203,6 +257,7 @@ export default function AdminPage() {
 
       // Recalculate impacts to show updated state
       await handleCalculateImpact();
+      await fetchPoolStats();
 
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
@@ -253,6 +308,81 @@ export default function AdminPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Pool Statistics Overview */}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+        <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium text-slate-600 uppercase tracking-wider">Total Collateral</CardTitle>
+              <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-slate-900 mb-1 font-numeric">{formatCurrency(totalCollateralValue)}</div>
+            <p className="text-xs text-slate-500">Total value locked in pool</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium text-slate-600 uppercase tracking-wider">Active Loans</CardTitle>
+              <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center">
+                <svg className="w-5 h-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-slate-900 mb-1 font-numeric">{activeLoansCount}</div>
+            <p className="text-xs text-slate-500">Currently outstanding</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium text-slate-600 uppercase tracking-wider">Total Loaned</CardTitle>
+              <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center">
+                <svg className="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-slate-900 mb-1 font-numeric">{formatCurrency(totalLoansOutstanding)}</div>
+            <p className="text-xs text-slate-500">Outstanding balance</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium text-slate-600 uppercase tracking-wider">Pool Health</CardTitle>
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${atRiskLoansCount > 0 ? 'bg-red-50' : avgPoolLTV >= 0.70 ? 'bg-amber-50' : 'bg-green-50'}`}>
+                <svg className={`w-5 h-5 ${atRiskLoansCount > 0 ? 'text-red-600' : avgPoolLTV >= 0.70 ? 'text-amber-600' : 'text-green-600'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold mb-1 font-numeric ${avgPoolLTV >= 0.80 ? 'text-red-600' : avgPoolLTV >= 0.70 ? 'text-amber-600' : 'text-green-600'}`}>
+              {(avgPoolLTV * 100).toFixed(1)}%
+            </div>
+            <p className="text-xs text-slate-500">
+              Avg LTV {atRiskLoansCount > 0 && <span className="text-red-600 font-semibold">• {atRiskLoansCount} at risk</span>}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
 
       <Card className="border-slate-200 shadow-sm">
         <CardHeader>
@@ -471,16 +601,16 @@ export default function AdminPage() {
               <h3 className="font-semibold text-slate-900 mb-2">Approval Criteria</h3>
               <ul className="text-sm text-slate-600 space-y-1">
                 <li>• LTV must be ≤ 70%</li>
-                <li>• Collateral must be unlocked</li>
+                <li>• Collateral must be locked</li>
                 <li>• Valid collateral contract</li>
               </ul>
             </div>
             <div className="p-4 rounded-lg bg-slate-50 border border-slate-200">
               <h3 className="font-semibold text-slate-900 mb-2">After Approval</h3>
               <ul className="text-sm text-slate-600 space-y-1">
-                <li>• Collateral auto-locks</li>
+                <li>• Collateral stays locked</li>
                 <li>• ActiveLoan contract created</li>
-                <li>• Funds transferred to borrower</li>
+                <li>• 8% APR interest accrues</li>
               </ul>
             </div>
             <div className="p-4 rounded-lg bg-slate-50 border border-slate-200">

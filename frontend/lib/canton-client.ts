@@ -4,7 +4,7 @@ import { AssetType, ASSET_CONFIG } from './types';
 // No Ledger instance needed
 // Canton JSON API requires fully qualified templateId: "packageId:module:entity"
 
-const PACKAGE_ID = '62cadf4e59b40316f2db227451d3372d780ff562659bb9b4101528d04621e9e3';
+const PACKAGE_ID = 'ff0eb054abe3a9a406093c6d594676766d7bf42a9bdf81d14f127e31f133dcaa';
 
 // Fetch user collateral
 export async function getCollateral(userId: string) {
@@ -178,6 +178,7 @@ export async function requestLoan(
           borrower: userId,
           lendingPool: process.env.NEXT_PUBLIC_POOL_PARTY || 'PrivyLendPool',
           collateralId,
+          collateralCid: collateralId,  // Pass contract ID for locking
           requestedAsset,
           requestedAmount: requestedAmount.toString(),
           collateralValue: collateralValue.toString(),
@@ -315,13 +316,18 @@ export async function unlockCollateral(collateralId: string) {
 }
 
 // Lock collateral (when loan is approved)
-export async function lockCollateral(collateralId: string, loanId: string) {
+export async function lockCollateral(collateralId: string, loanId: string, token?: string) {
   try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const result = await fetch(`${process.env.NEXT_PUBLIC_LEDGER_URL}?endpoint=/v1/exercise`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({
         templateId: `${PACKAGE_ID}:Collateral:CollateralAccount`,
         contractId: collateralId,
@@ -438,7 +444,8 @@ export async function triggerLiquidation(loanId: string) {
 }
 
 // Approve loan request (pool operator only)
-export async function approveLoan(loanRequestId: string, token?: string) {
+// Returns the new ActiveLoan contract ID
+export async function approveLoan(loanRequestId: string, token?: string): Promise<string> {
   try {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -463,7 +470,19 @@ export async function approveLoan(loanRequestId: string, token?: string) {
       throw new Error(error.errors ? error.errors.join(', ') : 'Exercise failed');
     }
 
-    return await result.json();
+    const data = await result.json();
+
+    // The Next.js API route wraps Canton's response: { result: {...}, status: 200 }
+    // Canton's actual response is in data.result.exerciseResult
+    const activeLoanId = data.result?.exerciseResult;
+
+    if (!activeLoanId || typeof activeLoanId !== 'string') {
+      console.error('Failed to extract ActiveLoan ID from response:', data);
+      throw new Error(`Could not extract ActiveLoan ID from approval response`);
+    }
+
+    console.log('✅ Loan approved - New ActiveLoan ID:', activeLoanId);
+    return activeLoanId;
   } catch (error) {
     console.error('Error approving loan:', error);
     throw error;

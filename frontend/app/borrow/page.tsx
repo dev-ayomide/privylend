@@ -78,13 +78,12 @@ export default function BorrowPage() {
     setSuccess(false);
 
     try {
-      // Step 1: Lock the collateral first (using collateralId as temporary loanId)
-      // This prevents borrower from withdrawing collateral while loan is pending/active
-      await api.lockCollateral(selectedCollateral, selectedCollateral);
+      // Step 1: Lock the collateral (borrower-controlled, returns new contract ID)
+      const lockedCollateralId = await api.lockCollateral(selectedCollateral, selectedCollateral);
 
-      // Step 2: Create the loan request
+      // Step 2: Create the loan request with the LOCKED collateral's contract ID
       await api.requestLoan(
-        selectedCollateral,
+        lockedCollateralId,
         data.amount,
         selected.effectiveValue,
         'USDC',

@@ -22,10 +22,22 @@ interface LoanTableProps {
 export function LoanTable({ loans, onRepay }: LoanTableProps) {
   const [repaying, setRepaying] = useState<string | null>(null);
 
+  const getEstimatedTotal = (loan: Loan): number => {
+    // Estimate accrued interest based on time elapsed
+    const startDate = new Date(loan.startDate);
+    const now = new Date();
+    const daysElapsed = (now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24);
+    const accruedInterest = loan.principal * loan.interestRate * (daysElapsed / 365);
+    return loan.outstandingBalance + accruedInterest;
+  };
+
   const handleRepay = (loan: Loan) => {
     setRepaying(loan.id);
+    // Pay estimated total + 1% buffer to ensure full repayment covers interest
+    const estimatedTotal = getEstimatedTotal(loan);
+    const paymentWithBuffer = Math.ceil(estimatedTotal * 1.01 * 100) / 100;
     setTimeout(() => {
-      onRepay(loan.id, loan.outstandingBalance);
+      onRepay(loan.id, paymentWithBuffer);
       setRepaying(null);
     }, 1000);
   };
@@ -161,6 +173,13 @@ export function LoanTable({ loans, onRepay }: LoanTableProps) {
                 <TableCell>
                   {loan.status === 'Pending' ? (
                     <span className="text-sm text-slate-500">Awaiting approval</span>
+                  ) : loan.status === 'Repaid' ? (
+                    <span className="text-sm text-green-600 font-medium flex items-center gap-1">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Completed
+                    </span>
                   ) : (loan.status === 'Active' || loan.status === 'MarginCall') ? (
                     <Button
                       onClick={() => handleRepay(loan)}

@@ -13,6 +13,7 @@ const USE_MOCK_DATA = process.env.NEXT_PUBLIC_USE_MOCK_DATA !== 'false';
 export default function LoansPage() {
   const { loans, api, refreshData } = usePrivyLend();
   const [repaymentSuccess, setRepaymentSuccess] = useState(false);
+  const [fullRepaymentSuccess, setFullRepaymentSuccess] = useState(false);
   const [repaymentError, setRepaymentError] = useState<string | null>(null);
   const [displayLoans, setDisplayLoans] = useState<Loan[]>([]);
 
@@ -32,12 +33,27 @@ export default function LoansPage() {
     }
 
     setRepaymentError(null);
+    setRepaymentSuccess(false);
+    setFullRepaymentSuccess(false);
 
     try {
+      // Find the loan to check if full repayment
+      const loan = displayLoans.find(l => l.id === loanId);
+      const isFullRepayment = loan && amount >= loan.outstandingBalance;
+
+      // Make payment (automatically unlocks collateral on full repayment via smart contract)
       await api.repayLoan(loanId, amount);
-      setRepaymentSuccess(true);
+
+      // Refresh data to get updated loan status and unlocked collateral
       await refreshData();
-      setTimeout(() => setRepaymentSuccess(false), 3000);
+
+      if (isFullRepayment) {
+        setFullRepaymentSuccess(true);
+        setTimeout(() => setFullRepaymentSuccess(false), 5000);
+      } else {
+        setRepaymentSuccess(true);
+        setTimeout(() => setRepaymentSuccess(false), 3000);
+      }
     } catch (err) {
       setRepaymentError(err instanceof Error ? err.message : 'Failed to repay loan');
     }
@@ -102,6 +118,27 @@ export default function LoansPage() {
               </svg>
               {repaymentError}
             </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {fullRepaymentSuccess && (
+        <Card className="border-green-200 bg-gradient-to-r from-green-50 to-emerald-50 shadow-lg">
+          <CardContent className="pt-6">
+            <div className="text-center space-y-3">
+              <div className="flex items-center justify-center gap-2">
+                <svg className="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p className="text-green-700 font-bold text-lg">Loan Fully Repaid!</p>
+                <svg className="w-8 h-8 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M2 10.5a1.5 1.5 0 113 0v6a1.5 1.5 0 01-3 0v-6zM6 10.333v5.43a2 2 0 001.106 1.79l.05.025A4 4 0 008.943 18h5.416a2 2 0 001.962-1.608l1.2-6A2 2 0 0015.56 8H12V4a2 2 0 00-2-2 1 1 0 00-1 1v.667a4 4 0 01-.8 2.4L6.8 7.933a4 4 0 00-.8 2.4z" />
+                </svg>
+              </div>
+              <p className="text-green-600 font-medium">
+                Your collateral has been automatically unlocked! You can now withdraw it from the home page.
+              </p>
+            </div>
           </CardContent>
         </Card>
       )}

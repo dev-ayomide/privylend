@@ -20,7 +20,7 @@ template CollateralAccount
     choice LockCollateral : ContractId CollateralAccount
       with
         loanId : Text
-      controller owner
+      controller owner  -- Owner locks their own collateral
       do
         assertMsg "Already locked" (not isLocked)
         create this with isLocked = True
@@ -40,3 +40,9 @@ template CollateralAccount
         create this with
           marketPrice = newPrice
           effectiveValue = newEffectiveValue
+
+    choice Withdraw : ()
+      controller owner
+      do
+        assertMsg "Cannot withdraw locked collateral" (not isLocked)
+        return ()

@@ -9,6 +9,7 @@ template LoanRequest
     borrower : Party
     lendingPool : Party
     collateralId : Text
+    collateralCid : ContractId CollateralAccount
     requestedAsset : Text      -- "USDC", "USDT", "cBTC"
     requestedAmount : Decimal
     collateralValue : Decimal
@@ -22,13 +23,30 @@ template LoanRequest
     let loanToValue = requestedAmount / collateralValue
     ensure loanToValue <= 0.70
 
+    choice RejectLoan : ()
+      controller lendingPool
+      do
+        -- Reject the loan request (archives it)
+        -- Borrower must cancel to unlock their collateral
+        return ()
+
+    choice CancelRequest : ContractId CollateralAccount
+      controller borrower
+      do
+        -- Borrower cancels their own request and unlocks collateral
+        exercise collateralCid UnlockCollateral
+
     choice ApproveLoan : ContractId ActiveLoan
       controller lendingPool
       do
+        -- Note: Collateral is locked by borrower before requesting loan
+        -- Pool cannot interact with borrower's collateral (Daml privacy model)
         currentTime <- getTime
         create ActiveLoan with
           borrower = borrower
           lender = lendingPool
+          collateralId = collateralId
+          collateralCid = collateralCid
           loanAsset = requestedAsset
           principal = requestedAmount
           outstandingBalance = requestedAmount
@@ -46,6 +64,8 @@ template ActiveLoan
   with
     borrower : Party
     lender : Party
+    collateralId : Text
+    collateralCid : ContractId CollateralAccount
     loanAsset : Text
     principal : Decimal
     outstandingBalance : Decimal
@@ -81,16 +101,48 @@ template ActiveLoan
         paymentAmount : Decimal
       controller borrower
       do
-        let newBalance = outstandingBalance - paymentAmount
+        -- Calculate accrued interest based on time elapsed
+        currentTime <- getTime
+        let timeDiff = subTime currentTime startDate
+        let microseconds = intToDecimal (convertRelTimeToMicroseconds timeDiff)
+        let daysElapsed = microseconds / 86400000000.0  -- microseconds per day
+        let accruedInterest = principal * interestRate * (daysElapsed / 365.0)
+        let totalOwed = outstandingBalance + accruedInterest
+
+        -- Enforce minimum payment covers at least accrued interest
+        assertMsg "Payment must be positive" (paymentAmount > 0.0)
+
+        let newBalance = totalOwed - paymentAmount
 
         if newBalance <= 0.0
-          then create this with outstandingBalance = 0.0, status = "Repaid"
-          else create this with
-                 outstandingBalance = newBalance
-                 currentLTV = newBalance / collateralValue
+          then do
+            -- Loan fully repaid - unlock collateral
+            unlockedCid <- exercise collateralCid UnlockCollateral
+            create this with
+              outstandingBalance = 0.0
+              status = "Repaid"
+              collateralCid = unlockedCid
+          else do
+            -- Partial payment - update balance and LTV
+            let newLTV = newBalance / collateralValue
+            let newStatus =
+                  if newLTV >= liquidationThreshold then "Liquidating"
+                  else if newLTV >= marginCallThreshold then "MarginCall"
+                  else "Active"
 
-    choice TriggerLiquidation : ()
+            create this with
+              outstandingBalance = newBalance
+              currentLTV = newLTV
+              status = newStatus
+
+    choice TriggerLiquidation : ContractId ActiveLoan
       controller lender
       do
         assertMsg "LTV not at threshold" (currentLTV >= liquidationThreshold)
-        return ()
+
+        -- Mark loan as liquidated
+        -- Note: Collateral seizure requires separate workflow with borrower
+        -- The locked collateral cannot be withdrawn by the borrower
+        create this with
+          status = "Liquidated"
+          outstandingBalance = 0.0

@@ -89,7 +89,7 @@ export class PrivyLendAPI {
       // Transform ActiveLoan contracts
       const active: Loan[] = activeLoans.map((c: any) => ({
         id: c.contractId,
-        collateralId: '',
+        collateralId: c.payload.collateralId || '',  // Now tracked in contract
         loanAsset: c.payload.loanAsset as AssetType,
         principal: parseFloat(c.payload.principal),
         outstandingBalance: parseFloat(c.payload.outstandingBalance),
@@ -206,11 +206,14 @@ export class PrivyLendAPI {
     }
   }
 
-  // Lock collateral (when loan is approved)
-  async lockCollateral(collateralId: string, loanId: string): Promise<void> {
+  // Lock collateral (before requesting loan) - returns new locked contract ID
+  async lockCollateral(collateralId: string, loanId: string): Promise<string> {
     try {
-      await CantonClient.lockCollateral(collateralId, loanId);
-      console.log('Collateral locked successfully');
+      const result = await CantonClient.lockCollateral(collateralId, loanId, this.token);
+      // Canton exercise returns new contract ID in exerciseResult
+      const newContractId = result?.result?.exerciseResult || result?.exerciseResult;
+      console.log('Collateral locked successfully, new contract ID:', newContractId);
+      return newContractId;
     } catch (error) {
       console.error('Error locking collateral:', error);
       throw error;
@@ -253,9 +256,9 @@ export class PrivyLendAPI {
   // Approve loan request (pool operator only)
   async approveLoan(loanRequestId: string): Promise<string> {
     try {
-      const result = await CantonClient.approveLoan(loanRequestId, this.token);
-      console.log('Loan approved successfully');
-      return result.contractId || 'approved';
+      const activeLoanId = await CantonClient.approveLoan(loanRequestId, this.token);
+      console.log('Loan approved successfully, new ActiveLoan ID:', activeLoanId);
+      return activeLoanId;
     } catch (error) {
       console.error('Error approving loan:', error);
       throw error;
@@ -291,7 +294,7 @@ export class PrivyLendAPI {
       // Transform ActiveLoan contracts
       return activeLoans.map((c: any) => ({
         id: c.contractId,
-        collateralId: '', // Not tracked in ActiveLoan contract
+        collateralId: c.payload.collateralId || '',  // Now tracked in contract
         loanAsset: c.payload.loanAsset as AssetType,
         principal: parseFloat(c.payload.principal),
         outstandingBalance: parseFloat(c.payload.outstandingBalance),
