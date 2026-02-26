@@ -52,6 +52,18 @@ export default function AdminPage() {
   const [avgPoolLTV, setAvgPoolLTV] = useState(0);
   const [atRiskLoansCount, setAtRiskLoansCount] = useState(0);
 
+  // Active loans monitoring
+  const [allActiveLoans, setAllActiveLoans] = useState<Loan[]>([]);
+  const [liquidating, setLiquidating] = useState<string | null>(null);
+
+  // Simulated prices (tracks what admin has set via oracle)
+  const [simulatedPrices, setSimulatedPrices] = useState<Record<AssetType, number>>({
+    cBTC: ASSET_CONFIG.cBTC.price,
+    cETH: ASSET_CONFIG.cETH.price,
+    USDC: ASSET_CONFIG.USDC.price,
+    USDT: ASSET_CONFIG.USDT.price,
+  });
+
   // Initialize API with Pool Party credentials
   useEffect(() => {
     const poolParty = process.env.NEXT_PUBLIC_POOL_PARTY;
@@ -121,6 +133,7 @@ export default function AdminPage() {
       setActiveLoansCount(activeLoans.length);
       setAvgPoolLTV(avgLTV);
       setAtRiskLoansCount(atRisk);
+      setAllActiveLoans(allLoans);
     } catch (err) {
       console.error('Error fetching pool stats:', err);
     }
@@ -228,8 +241,8 @@ export default function AdminPage() {
         return;
       }
 
-      // Get current price from ASSET_CONFIG
-      const currentPrice = ASSET_CONFIG[selectedAsset].price;
+      // Use simulated price as baseline (tracks admin's previous changes)
+      const currentPrice = simulatedPrices[selectedAsset];
 
       // Calculate impact for each loan
       const impactData: ImpactData[] = loans.map(loan => {
@@ -276,15 +289,68 @@ export default function AdminPage() {
       await api.updateLoanCollateralValue(loanId, newCollateralValue);
       setSuccess(`Loan ${loanId.slice(0, 8)}... updated successfully!`);
 
-      // Recalculate impacts to show updated state
-      await handleCalculateImpact();
+      // Refresh pool stats and active loans
       await fetchPoolStats();
+
+      // Clear impacts since they're now applied
+      setImpacts(prev => prev.filter(i => i.loanId !== loanId));
 
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update loan');
     } finally {
       setUpdating(null);
+    }
+  };
+
+  // Update all loans at once
+  const handleUpdateAllLoans = async () => {
+    if (USE_MOCK_DATA || !api || impacts.length === 0) return;
+
+    setError(null);
+    let updated = 0;
+
+    for (const impact of impacts) {
+      if (impact.statusChange === 'No change') continue;
+      setUpdating(impact.loanId);
+      try {
+        await api.updateLoanCollateralValue(impact.loanId, impact.newCollateralValue);
+        updated++;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : `Failed to update loan ${impact.loanId.slice(0, 8)}`);
+        break;
+      }
+    }
+
+    setUpdating(null);
+
+    if (updated > 0) {
+      // Update simulated price baseline
+      const price = parseFloat(newPrice);
+      setSimulatedPrices(prev => ({ ...prev, [selectedAsset]: price }));
+      setSuccess(`Updated ${updated} loan(s) successfully!`);
+      setImpacts([]);
+      await fetchPoolStats();
+      setTimeout(() => setSuccess(null), 3000);
+    }
+  };
+
+  // Trigger liquidation on a specific loan
+  const handleTriggerLiquidation = async (loanId: string) => {
+    if (USE_MOCK_DATA || !api) return;
+
+    setLiquidating(loanId);
+    setError(null);
+
+    try {
+      await api.triggerLiquidation(loanId);
+      setSuccess(`Liquidation triggered for loan ${loanId.slice(0, 8)}...`);
+      await fetchPoolStats();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to trigger liquidation');
+    } finally {
+      setLiquidating(null);
     }
   };
 
@@ -417,22 +483,22 @@ export default function AdminPage() {
           <div className="p-4 rounded-lg bg-slate-50 border border-slate-200">
             <h3 className="text-sm font-semibold text-slate-700 mb-3">Current Asset Prices</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div>
-                <p className="text-xs text-slate-500">cBTC</p>
-                <p className="text-lg font-bold text-slate-900 font-numeric">{formatCurrency(ASSET_CONFIG.cBTC.price)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500">cETH</p>
-                <p className="text-lg font-bold text-slate-900 font-numeric">{formatCurrency(ASSET_CONFIG.cETH.price)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500">USDC</p>
-                <p className="text-lg font-bold text-slate-900 font-numeric">{formatCurrency(ASSET_CONFIG.USDC.price)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500">USDT</p>
-                <p className="text-lg font-bold text-slate-900 font-numeric">{formatCurrency(ASSET_CONFIG.USDT.price)}</p>
-              </div>
+              {(['cBTC', 'cETH', 'USDC', 'USDT'] as AssetType[]).map(asset => {
+                const changed = simulatedPrices[asset] !== ASSET_CONFIG[asset].price;
+                return (
+                  <div key={asset}>
+                    <p className="text-xs text-slate-500">{asset}</p>
+                    <p className={`text-lg font-bold font-numeric ${changed ? 'text-amber-600' : 'text-slate-900'}`}>
+                      {formatCurrency(simulatedPrices[asset])}
+                    </p>
+                    {changed && (
+                      <p className="text-xs text-slate-400">
+                        was {formatCurrency(ASSET_CONFIG[asset].price)}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -468,17 +534,26 @@ export default function AdminPage() {
             </div>
           </div>
 
-          <div>
+          <div className="flex flex-wrap items-center gap-3">
             <Button
               onClick={handleCalculateImpact}
               disabled={calculating || !api}
-              className="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white"
+              className="bg-blue-600 hover:bg-blue-700 text-white"
             >
               {calculating ? 'Calculating...' : 'Calculate Impact on Loans'}
             </Button>
-            {parseFloat(newPrice) > 0 && ASSET_CONFIG[selectedAsset] && (
-              <p className="text-sm text-slate-600 mt-2">
-                Price change: {((parseFloat(newPrice) / ASSET_CONFIG[selectedAsset].price - 1) * 100).toFixed(1)}%
+            {impacts.length > 0 && impacts.some(i => i.statusChange !== 'No change') && (
+              <Button
+                onClick={handleUpdateAllLoans}
+                disabled={!!updating || !api}
+                className="bg-amber-600 hover:bg-amber-700 text-white"
+              >
+                {updating ? 'Updating...' : `Update All (${impacts.filter(i => i.statusChange !== 'No change').length})`}
+              </Button>
+            )}
+            {parseFloat(newPrice) > 0 && simulatedPrices[selectedAsset] && (
+              <p className="text-sm text-slate-600">
+                Price change: {((parseFloat(newPrice) / simulatedPrices[selectedAsset] - 1) * 100).toFixed(1)}%
               </p>
             )}
           </div>
@@ -535,6 +610,93 @@ export default function AdminPage() {
                   </tbody>
                 </table>
               </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Active Loans Monitoring */}
+      <Card className="border-slate-200 shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-xl font-semibold text-slate-900">Active Loans Monitor</CardTitle>
+          <CardDescription>
+            Monitor all loans, LTV ratios, and trigger liquidations
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {allActiveLoans.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-slate-600">No active loans</p>
+              <p className="text-sm text-slate-500 mt-2">Approved loans will appear here</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto border border-slate-200 rounded-lg">
+              <table className="w-full">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase">Borrower</th>
+                    <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase">Asset</th>
+                    <th className="text-right py-3 px-4 text-xs font-semibold text-slate-600 uppercase">Outstanding</th>
+                    <th className="text-right py-3 px-4 text-xs font-semibold text-slate-600 uppercase">Collateral</th>
+                    <th className="text-right py-3 px-4 text-xs font-semibold text-slate-600 uppercase">LTV</th>
+                    <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase">Status</th>
+                    <th className="text-center py-3 px-4 text-xs font-semibold text-slate-600 uppercase">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {allActiveLoans.map((loan) => (
+                    <tr key={loan.id} className={`border-t border-slate-100 hover:bg-slate-50 ${
+                      loan.status === 'Liquidating' ? 'bg-red-50' :
+                      loan.status === 'MarginCall' ? 'bg-amber-50' : ''
+                    }`}>
+                      <td className="py-3 px-4 text-sm text-slate-900">
+                        {loan.borrower ? loan.borrower.split('::')[0] : 'Unknown'}
+                      </td>
+                      <td className="py-3 px-4 text-sm text-slate-900">{loan.loanAsset}</td>
+                      <td className="py-3 px-4 text-sm text-right font-numeric text-slate-900">
+                        {formatCurrency(loan.outstandingBalance)}
+                      </td>
+                      <td className="py-3 px-4 text-sm text-right font-numeric text-slate-900">
+                        {formatCurrency(loan.collateralValue)}
+                      </td>
+                      <td className="py-3 px-4 text-sm text-right font-numeric">
+                        <span className={getLTVColor(loan.currentLTV)}>
+                          {(loan.currentLTV * 100).toFixed(1)}%
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-sm">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          loan.status === 'Active' ? 'bg-blue-100 text-blue-700' :
+                          loan.status === 'MarginCall' ? 'bg-amber-100 text-amber-700' :
+                          loan.status === 'Liquidating' ? 'bg-red-100 text-red-700' :
+                          loan.status === 'Liquidated' ? 'bg-slate-100 text-slate-700' :
+                          loan.status === 'Repaid' ? 'bg-green-100 text-green-700' :
+                          'bg-slate-100 text-slate-700'
+                        }`}>
+                          {loan.status}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        {(loan.status === 'Liquidating' || loan.currentLTV >= 0.85) && loan.status !== 'Liquidated' && loan.status !== 'Repaid' ? (
+                          <Button
+                            onClick={() => handleTriggerLiquidation(loan.id)}
+                            disabled={liquidating === loan.id}
+                            className="bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-1"
+                          >
+                            {liquidating === loan.id ? 'Liquidating...' : 'Liquidate'}
+                          </Button>
+                        ) : loan.status === 'Liquidated' ? (
+                          <span className="text-xs text-slate-500 font-medium">Liquidated</span>
+                        ) : loan.status === 'Repaid' ? (
+                          <span className="text-xs text-green-600 font-medium">Repaid</span>
+                        ) : (
+                          <span className="text-xs text-slate-400">Healthy</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </CardContent>

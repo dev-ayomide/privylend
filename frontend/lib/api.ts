@@ -319,7 +319,8 @@ export class PrivyLendAPI {
       // Transform ActiveLoan contracts
       return activeLoans.map((c: any) => ({
         id: c.contractId,
-        collateralId: c.payload.collateralId || '',  // Now tracked in contract
+        borrower: c.payload.borrower,
+        collateralId: c.payload.collateralId || '',
         loanAsset: c.payload.loanAsset as AssetType,
         principal: parseFloat(c.payload.principal),
         outstandingBalance: parseFloat(c.payload.outstandingBalance),
