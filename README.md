@@ -4,7 +4,7 @@
 
 PrivyLend is a decentralized lending protocol where borrowers post collateral that is cryptographically invisible to the lending pool -- enforced by Daml's signatory model, not access control or UI restrictions. Built for the Canton Construct Ideathon 2025.
 
-**Demo Video** | **GitHub**: [github.com/dev-ayomide/privylend](https://github.com/dev-ayomide/privylend)
+**Demo Video**:[Privylend Demo on Youtube](https://youtu.be/4J15cyge3qA) | **GitHub**: [github.com/dev-ayomide/privylend](https://github.com/dev-ayomide/privylend)
 
 ---
 
@@ -56,8 +56,6 @@ cd frontend
 npm install
 npm run dev
 ```
-
-Set `NEXT_PUBLIC_USE_MOCK_DATA=true` in `frontend/.env.local` to use localStorage-based mock data for UI exploration.
 
 ---
 
@@ -210,7 +208,7 @@ privylend/
 
 ---
 
-## Canton Construct Ideathon 2025
+## Canton Construct 
 
 **Challenge Track**: Lending, Borrowing & Yield Applications
 
@@ -223,10 +221,6 @@ privylend/
 - Phase 2 (Mentorship Build): 4 deployed Daml contracts, 12+ on-chain choices, zero mock data, full loan lifecycle on Canton, admin dashboard with price oracle simulation
 
 ---
-
-## Note for Judges
-
-PrivyLend runs on Canton sandbox, which requires the Daml SDK installed locally. Canton does not have a public testnet -- it is designed for permissioned institutional networks.
 
 **To verify the smart contracts without running the full app:**
 ```bash
